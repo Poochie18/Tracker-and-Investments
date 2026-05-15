@@ -1,0 +1,43 @@
+import Dexie, { type EntityTable } from 'dexie'
+import type { LocalAccount, LocalCategory, LocalTransaction, LocalTag } from './schema'
+
+// ============================================================
+// Dexie — обгортка над IndexedDB для зручної роботи з локальною БД.
+// Структура таблиць відповідає Supabase, плюс поля _sync_*.
+// ============================================================
+
+export class FinanceDB extends Dexie {
+  // Dexie автоматично підтягує типи через EntityTable<T, 'id'>
+  accounts!: EntityTable<LocalAccount, 'id'>
+  categories!: EntityTable<LocalCategory, 'id'>
+  transactions!: EntityTable<LocalTransaction, 'id'>
+  tags!: EntityTable<LocalTag, 'id'>
+
+  constructor() {
+    super('finance-app-db')
+
+    // Версія 1 схеми.
+    // Тут вказуємо ТІЛЬКИ поля для індексів — не всі колонки.
+    // ++ = autoincrement (не використовуємо — у нас UUID).
+    // & = унікальний індекс.
+    // * = мульти-запис (масив).
+    this.version(1).stores({
+      accounts: '&id, user_id, _sync_status',
+      categories: '&id, user_id, type, sort_order, _sync_status',
+      transactions: '&id, user_id, account_id, category_id, date, deleted_at, _sync_status',
+      tags: '&id, user_id, name',
+    })
+
+    // v2: додаємо compound index [user_id+type] для categories —
+    // без нього getByType кидає Dexie error і категорії не відображаються
+    this.version(2).stores({
+      accounts: '&id, user_id, _sync_status',
+      categories: '&id, user_id, type, [user_id+type], sort_order, _sync_status',
+      transactions: '&id, user_id, account_id, category_id, date, deleted_at, _sync_status',
+      tags: '&id, user_id, name',
+    })
+  }
+}
+
+// Singleton — один екземпляр бази на весь додаток
+export const db = new FinanceDB()

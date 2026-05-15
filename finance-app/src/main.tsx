@@ -1,0 +1,14 @@
+import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
+import './index.css'
+import './lib/i18n'
+import App from './App.tsx'
+
+const rootEl = document.getElementById('root')
+if (!rootEl) throw new Error('Елемент #root не знайдено в index.html')
+
+createRoot(rootEl).render(
+  <StrictMode>
+    <App />
+  </StrictMode>
+)

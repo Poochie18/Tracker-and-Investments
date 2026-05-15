@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm create *)",
+      "Bash(npm install *)",
+      "Bash(node -e \"const p = require\\('./node_modules/tailwindcss/package.json'\\); console.log\\(p.version\\)\")",
+      "Bash(timeout 8 npm run dev)",
+      "PowerShell(New-Item -ItemType Directory -Force -Path \"c:\\\\Users\\\\mykol\\\\OneDrive\\\\Documents\\\\Tracker and Investments\\\\finance-app\\\\supabase\\\\migrations\")",
+      "Bash(timeout 6 npm run dev)",
+      "PowerShell(New-Item -ItemType Directory -Force -Path \"c:\\\\Users\\\\mykol\\\\OneDrive\\\\Documents\\\\Tracker and Investments\\\\finance-app\\\\src\\\\lib\\\\utils\\\\__tests__\")",
+      "Bash(timeout 7 npm run dev)",
+      "Bash(npx tsc *)",
+      "Bash(npx vitest *)"
+    ]
+  }
+}

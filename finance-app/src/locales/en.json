@@ -1,0 +1,107 @@
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "back": "Back",
+    "delete": "Delete",
+    "archive": "Archive",
+    "restore": "Restore",
+    "create": "Create",
+    "loading": "Loading...",
+    "error": "Error",
+    "retry": "Try again",
+    "yes": "Yes",
+    "no": "No",
+    "ok": "OK",
+    "close": "Close",
+    "search": "Search",
+    "noData": "No data"
+  },
+  "nav": {
+    "overview": "Overview",
+    "list": "List",
+    "investments": "Investments",
+    "settings": "Settings"
+  },
+  "auth": {
+    "signIn": "Sign in with Google",
+    "signOut": "Sign out",
+    "signingIn": "Signing in...",
+    "signOutConfirm": "Are you sure you want to sign out?"
+  },
+  "transaction": {
+    "expense": "Expense",
+    "income": "Income",
+    "amount": "Amount (₴)",
+    "category": "Category",
+    "date": "Date",
+    "comment": "Comment",
+    "commentPlaceholder": "Add a comment...",
+    "account": "Account",
+    "newTransaction": "New transaction",
+    "saveSuccess": "Saved",
+    "saveError": "Could not save. Please try again.",
+    "amountError": "Enter an amount greater than 0",
+    "categoryError": "Select a category",
+    "accountError": "Account not found",
+    "deleteConfirm": "Delete transaction?"
+  },
+  "category": {
+    "title": "Categories",
+    "expense": "Expenses",
+    "income": "Income",
+    "new": "New category",
+    "name": "Name",
+    "namePlaceholder": "Category name",
+    "icon": "Icon",
+    "color": "Color",
+    "system": "System",
+    "archived": "Archived",
+    "archiveConfirm": "Archive this category?",
+    "systemArchiveError": "System categories cannot be archived",
+    "createError": "Could not create category"
+  },
+  "settings": {
+    "title": "Settings",
+    "categories": "Manage categories",
+    "backup": "Backup",
+    "about": "About",
+    "version": "Version",
+    "signOut": "Sign out"
+  },
+  "backup": {
+    "title": "Backup",
+    "export": "Export data",
+    "exportDesc": "Save all transactions and categories to a JSON file",
+    "import": "Import data",
+    "importDesc": "Load data from a JSON file",
+    "importMode": "Import mode",
+    "replace": "Replace",
+    "replaceDesc": "Delete all current data and replace with imported data",
+    "merge": "Merge",
+    "mergeDesc": "Add imported data to current data (duplicates by ID are skipped)",
+    "importing": "Importing...",
+    "exporting": "Exporting...",
+    "importSuccess": "Data imported successfully",
+    "exportSuccess": "Data exported",
+    "importError": "Import error: invalid file format",
+    "replaceWarning": "Warning! All current data will be deleted. Continue?"
+  },
+  "sync": {
+    "idle": "Synced",
+    "syncing": "Syncing...",
+    "pending": "Pending sync",
+    "error": "Sync error",
+    "offline": "Offline",
+    "syncNow": "Sync now",
+    "errors": "Errors: {{count}}"
+  },
+  "period": {
+    "day": "Day",
+    "week": "Week",
+    "month": "Month",
+    "year": "Year",
+    "today": "Today",
+    "yesterday": "Yesterday"
+  }
+}
