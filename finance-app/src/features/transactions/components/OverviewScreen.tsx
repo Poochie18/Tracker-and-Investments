@@ -14,6 +14,7 @@ import { PeriodNavigator } from './PeriodNavigator'
 import { DonutChart } from './DonutChart'
 import { CategoryListItem } from './CategoryListItem'
 import { SyncStatusIndicator } from '@/components/SyncStatusIndicator'
+import { AccountIconButton } from '@/components/AccountIconButton'
 import type { LocalCategory } from '@/lib/db/schema'
 
 export function OverviewScreen() {
@@ -106,8 +107,11 @@ export function OverviewScreen() {
           paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)',
         }}
       >
-        {/* Дата по центру (зі стрілками навігації) + sync справа */}
+        {/* Акаунт зліва + дата по центру (зі стрілками навігації) + sync справа */}
         <div className="relative flex items-center justify-center mb-2">
+          <div className="absolute left-0">
+            <AccountIconButton />
+          </div>
           <PeriodNavigator
             period={selectedPeriod}
             anchor={periodAnchor}

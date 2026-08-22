@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight, Tag, Archive, LogOut, Info, Wrench, FlaskConical, Trash2, UploadCloud } from 'lucide-react'
+import { ChevronRight, Tag, Archive, LogOut, Info, Wrench, Trash2, UploadCloud } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { useQueryClient } from '@tanstack/react-query'
 import { deduplicateCategories } from '@/lib/auth/first-login-setup'
 import { syncDefaultCategories } from '@/lib/db/category-sync'
-import { seedDevTestData, clearAllTransactions } from '@/lib/db/dev-seed-generator'
+import { clearAllTransactions } from '@/lib/db/dev-data-tools'
 import { importRealTransactions, importRealInvestments } from '@/lib/db/dev-real-data-importer'
 import { transactionKeys } from '@/hooks/use-transactions'
 import { investmentKeys } from '@/hooks/use-investments'
@@ -20,8 +20,8 @@ export function SettingsScreen() {
   const [deduping, setDeduping] = useState(false)
   const [syncingCats, setSyncingCats] = useState(false)
   const [syncCatsMsg, setSyncCatsMsg] = useState<string | null>(null)
-  const [seeding, setSeeding] = useState(false)
-  const [seedMsg, setSeedMsg] = useState<string | null>(null)
+  const [clearingTx, setClearingTx] = useState(false)
+  const [clearTxMsg, setClearTxMsg] = useState<string | null>(null)
   const [importing, setImporting] = useState(false)
   const [importMsg, setImportMsg] = useState<string | null>(null)
 
@@ -67,33 +67,18 @@ export function SettingsScreen() {
     void queryClient.invalidateQueries({ queryKey: ['account', user.id] })
   }
 
-  const handleSeed = async () => {
-    if (!user) return
-    setSeeding(true)
-    setSeedMsg(null)
-    try {
-      const count = await seedDevTestData(user.id)
-      invalidateAllTransactionData()
-      setSeedMsg(`Створено ${count} транзакцій за останні 90 днів`)
-    } catch (err) {
-      setSeedMsg(err instanceof Error ? err.message : 'Помилка генерації даних')
-    } finally {
-      setSeeding(false)
-    }
-  }
-
   const handleClearTransactions = async () => {
     if (!user) return
-    setSeeding(true)
-    setSeedMsg(null)
+    setClearingTx(true)
+    setClearTxMsg(null)
     try {
       const count = await clearAllTransactions(user.id)
       invalidateAllTransactionData()
-      setSeedMsg(`Видалено ${count} транзакцій`)
+      setClearTxMsg(`Видалено ${count} транзакцій`)
     } catch (err) {
-      setSeedMsg(err instanceof Error ? err.message : 'Помилка видалення')
+      setClearTxMsg(err instanceof Error ? err.message : 'Помилка видалення')
     } finally {
-      setSeeding(false)
+      setClearingTx(false)
     }
   }
 
@@ -177,57 +162,6 @@ export function SettingsScreen() {
           onPress={() => navigate('/settings/backup')}
         />
 
-        {/* ── Виправлення дублікатів ───────────────────────── */}
-        <button
-          type="button"
-          onClick={handleDedup}
-          disabled={deduping}
-          className="flex items-center gap-3 px-4 py-3 rounded-2xl w-full text-left transition-opacity active:opacity-70 disabled:opacity-50"
-          style={{ backgroundColor: 'var(--color-bg-card)' }}
-        >
-          <Wrench size={18} style={{ color: 'var(--color-text-secondary)' }} />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
-              {deduping ? 'Очищення...' : 'Виправити дублікати категорій'}
-            </p>
-            {dedupMsg && (
-              <p className="text-xs mt-0.5" style={{ color: 'var(--color-accent)' }}>
-                {dedupMsg}
-              </p>
-            )}
-            {!dedupMsg && (
-              <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>
-                Видалити дублікати, що виникли при першому вході
-              </p>
-            )}
-          </div>
-        </button>
-
-        {/* ── Синхронізація дефолтних категорій ────────────── */}
-        <button
-          type="button"
-          onClick={handleSyncCategories}
-          disabled={syncingCats}
-          className="flex items-center gap-3 px-4 py-3 rounded-2xl w-full text-left transition-opacity active:opacity-70 disabled:opacity-50"
-          style={{ backgroundColor: 'var(--color-bg-card)' }}
-        >
-          <Tag size={18} style={{ color: 'var(--color-text-secondary)' }} />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
-              {syncingCats ? 'Синхронізуємо...' : 'Оновити категорії за замовчуванням'}
-            </p>
-            {syncCatsMsg ? (
-              <p className="text-xs mt-0.5" style={{ color: 'var(--color-accent)' }}>
-                {syncCatsMsg}
-              </p>
-            ) : (
-              <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>
-                Додати нові й перейменувати застарілі категорії
-              </p>
-            )}
-          </div>
-        </button>
-
         {/* ── DEV: тестові дані (тільки в dev-збірці) ──────── */}
         {import.meta.env.DEV && (
           <>
@@ -235,44 +169,76 @@ export function SettingsScreen() {
               DEV: тестові дані
             </p>
 
+            {/* ── Виправлення дублікатів ───────────────────── */}
             <button
               type="button"
-              onClick={handleSeed}
-              disabled={seeding}
+              onClick={handleDedup}
+              disabled={deduping}
               className="flex items-center gap-3 px-4 py-3 rounded-2xl w-full text-left transition-opacity active:opacity-70 disabled:opacity-50"
               style={{ backgroundColor: 'var(--color-bg-card)' }}
             >
-              <FlaskConical size={18} style={{ color: 'var(--color-text-secondary)' }} />
+              <Wrench size={18} style={{ color: 'var(--color-text-secondary)' }} />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
-                  {seeding ? 'Генеруємо...' : 'Наповнити тестовими транзакціями'}
+                  {deduping ? 'Очищення...' : 'Виправити дублікати категорій'}
                 </p>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>
-                  ~90 днів реалістичних витрат і доходів
+                {dedupMsg && (
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--color-accent)' }}>
+                    {dedupMsg}
+                  </p>
+                )}
+                {!dedupMsg && (
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>
+                    Видалити дублікати, що виникли при першому вході
+                  </p>
+                )}
+              </div>
+            </button>
+
+            {/* ── Синхронізація дефолтних категорій ────────── */}
+            <button
+              type="button"
+              onClick={handleSyncCategories}
+              disabled={syncingCats}
+              className="flex items-center gap-3 px-4 py-3 rounded-2xl w-full text-left transition-opacity active:opacity-70 disabled:opacity-50"
+              style={{ backgroundColor: 'var(--color-bg-card)' }}
+            >
+              <Tag size={18} style={{ color: 'var(--color-text-secondary)' }} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
+                  {syncingCats ? 'Синхронізуємо...' : 'Оновити категорії за замовчуванням'}
                 </p>
+                {syncCatsMsg ? (
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--color-accent)' }}>
+                    {syncCatsMsg}
+                  </p>
+                ) : (
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>
+                    Додати нові й перейменувати застарілі категорії
+                  </p>
+                )}
               </div>
             </button>
 
             <button
               type="button"
               onClick={handleClearTransactions}
-              disabled={seeding}
+              disabled={clearingTx}
               className="flex items-center gap-3 px-4 py-3 rounded-2xl w-full text-left transition-opacity active:opacity-70 disabled:opacity-50"
               style={{ backgroundColor: 'var(--color-bg-card)' }}
             >
               <Trash2 size={18} style={{ color: 'var(--color-expense)' }} />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium" style={{ color: 'var(--color-expense)' }}>
-                  Видалити всі транзакції
+                  {clearingTx ? 'Видаляємо...' : 'Видалити всі транзакції'}
                 </p>
+                {clearTxMsg && (
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>
+                    {clearTxMsg}
+                  </p>
+                )}
               </div>
             </button>
-
-            {seedMsg && (
-              <p className="text-xs px-1" style={{ color: 'var(--color-accent)' }}>
-                {seedMsg}
-              </p>
-            )}
 
             <button
               type="button"

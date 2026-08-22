@@ -13,6 +13,7 @@ import { PeriodSelector } from './PeriodSelector'
 import { PeriodNavigator } from './PeriodNavigator'
 import { SwipeToReveal } from '@/components/SwipeToReveal'
 import { SyncStatusIndicator } from '@/components/SyncStatusIndicator'
+import { AccountIconButton } from '@/components/AccountIconButton'
 import type { LocalTransaction } from '@/lib/db/schema'
 
 export function TransactionsListScreen() {
@@ -71,9 +72,12 @@ export function TransactionsListScreen() {
         }}
       >
         <div className="flex items-center justify-between mb-2">
-          <h1 className="text-lg font-semibold" style={{ color: 'var(--color-text-primary)' }}>
-            Транзакції
-          </h1>
+          <div className="flex items-center gap-2">
+            <AccountIconButton />
+            <h1 className="text-lg font-semibold" style={{ color: 'var(--color-text-primary)' }}>
+              Транзакції
+            </h1>
+          </div>
           <SyncStatusIndicator />
         </div>
 

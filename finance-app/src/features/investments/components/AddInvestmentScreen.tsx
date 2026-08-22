@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Check, Trash2 } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import {
@@ -19,6 +19,7 @@ const CURRENCIES = ['UAH', 'USD', 'EUR']
 // свій стан напряму з даних, без setState всередині ефекту.
 export function AddInvestmentScreen() {
   const { id } = useParams<{ id?: string }>()
+  const [searchParams] = useSearchParams()
   const isEdit = !!id
   const { data: existing, isLoading } = useInvestment(id)
 
@@ -26,15 +27,23 @@ export function AddInvestmentScreen() {
   // на мить змонтується порожньою і одразу перемонтується.
   if (isEdit && isLoading) return null
 
-  return <InvestmentForm key={id ?? 'new'} id={id} existing={existing} />
+  // ?type=deposit — коли додаємо актив із конкретної вкладки розділу
+  // (напр. "Депозити"), одразу підставляємо цей тип у форму.
+  const defaultTypeParam = searchParams.get('type')
+  const defaultType = INVESTMENT_TYPES.includes(defaultTypeParam as InvestmentType)
+    ? (defaultTypeParam as InvestmentType)
+    : undefined
+
+  return <InvestmentForm key={id ?? 'new'} id={id} existing={existing} defaultType={defaultType} />
 }
 
 interface InvestmentFormProps {
   id: string | undefined
   existing: LocalInvestment | undefined
+  defaultType?: InvestmentType
 }
 
-function InvestmentForm({ id, existing }: InvestmentFormProps) {
+function InvestmentForm({ id, existing, defaultType }: InvestmentFormProps) {
   const navigate = useNavigate()
   const isEdit = !!id
 
@@ -44,7 +53,7 @@ function InvestmentForm({ id, existing }: InvestmentFormProps) {
   const deleteInvestment = useDeleteInvestment(user?.id ?? '')
 
   const [name, setName] = useState(existing?.name ?? '')
-  const [type, setType] = useState<InvestmentType>(existing?.type ?? 'stock')
+  const [type, setType] = useState<InvestmentType>(existing?.type ?? defaultType ?? 'stock')
   const [quantity, setQuantity] = useState(existing ? String(existing.quantity) : '')
   const [purchasePrice, setPurchasePrice] = useState(
     existing ? String(existing.purchase_price / 100) : ''
@@ -107,7 +116,9 @@ function InvestmentForm({ id, existing }: InvestmentFormProps) {
       } else {
         await createInvestment.mutateAsync(formData)
       }
-      navigate('/investments')
+      // Повертаємось на вкладку саме цього типу активу — зберігає контекст,
+      // якщо додавали/редагували, наприклад, з вкладки "Депозити".
+      navigate(`/investments/type/${type}`)
     } catch {
       setError('Не вдалось зберегти. Спробуй ще раз.')
     }

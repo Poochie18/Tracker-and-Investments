@@ -1,16 +1,32 @@
-import { useNavigate } from 'react-router-dom'
+import { useMemo } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { PlusCircle, TrendingUp } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { useInvestments } from '@/hooks/use-investments'
 import { Money, sumMoney } from '@/lib/utils/money'
 import { SyncStatusIndicator } from '@/components/SyncStatusIndicator'
+import { AccountIconButton } from '@/components/AccountIconButton'
 import { PortfolioSummaryCard } from './PortfolioSummaryCard'
 import { InvestmentListItem } from './InvestmentListItem'
+import { INVESTMENT_TYPE_META } from '../types'
+import type { InvestmentType } from '@/lib/db/schema'
+
+const VALID_TYPES: InvestmentType[] = ['stock', 'crypto', 'bond', 'deposit', 'other']
 
 export function InvestmentsScreen() {
   const navigate = useNavigate()
+  const { assetType } = useParams<{ assetType?: string }>()
+  const activeType = VALID_TYPES.includes(assetType as InvestmentType)
+    ? (assetType as InvestmentType)
+    : null
+
   const { user } = useAuth()
-  const { data: investments = [], isLoading } = useInvestments(user?.id)
+  const { data: allInvestments = [], isLoading } = useInvestments(user?.id)
+
+  const investments = useMemo(
+    () => (activeType ? allInvestments.filter((i) => i.type === activeType) : allInvestments),
+    [allInvestments, activeType]
+  )
 
   // Портфель рахуємо в "умовних копійках" незалежно від валюти активу —
   // MVP не робить конвертацію валют, тому сума коректна лише якщо
@@ -23,6 +39,12 @@ export function InvestmentsScreen() {
   )
   const pnl = currentValue.subtract(invested)
   const pnlPercent = invested.isZero() ? 0 : (pnl.toKopiyky() / invested.toKopiyky()) * 100
+
+  const addHref = activeType ? `/investments/add?type=${activeType}` : '/investments/add'
+  const typeMeta = activeType ? INVESTMENT_TYPE_META[activeType] : null
+  const emptyText = typeMeta
+    ? `Ще немає жодного активу типу «${typeMeta.label}».`
+    : 'Ще немає жодного активу. Додай перший — акцію, крипту, депозит чи облігацію.'
 
   return (
     <div
@@ -37,8 +59,9 @@ export function InvestmentsScreen() {
           paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)',
         }}
       >
+        <AccountIconButton />
         <h1 className="text-xl font-semibold flex-1" style={{ color: 'var(--color-text-primary)' }}>
-          Інвестиції
+          {typeMeta ? typeMeta.label : 'Інвестиції'}
         </h1>
         <SyncStatusIndicator />
       </div>
@@ -60,11 +83,9 @@ export function InvestmentsScreen() {
               style={{ color: 'var(--color-text-secondary)' }}
             >
               <TrendingUp size={48} />
-              <p className="text-center text-sm max-w-xs">
-                Ще немає жодного активу. Додай перший — акцію, крипту, депозит чи облігацію.
-              </p>
+              <p className="text-center text-sm max-w-xs">{emptyText}</p>
               <button
-                onClick={() => navigate('/investments/add')}
+                onClick={() => navigate(addHref)}
                 className="flex items-center gap-2 px-5 py-3 rounded-2xl font-semibold text-sm"
                 style={{ backgroundColor: 'var(--color-accent)', color: '#1B2A2A' }}
               >
@@ -84,7 +105,7 @@ export function InvestmentsScreen() {
 
           {investments.length > 0 && (
             <button
-              onClick={() => navigate('/investments/add')}
+              onClick={() => navigate(addHref)}
               className="flex items-center justify-center gap-2 mt-2 py-3 rounded-2xl font-medium text-sm"
               style={{ backgroundColor: 'var(--color-bg-card)', color: 'var(--color-accent)' }}
             >
