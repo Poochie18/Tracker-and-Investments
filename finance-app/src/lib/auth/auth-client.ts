@@ -15,6 +15,16 @@ export const authClient = {
 
   signOut: () => supabase.auth.signOut(),
 
+  // Тимчасовий email/password вхід для локального тестування,
+  // поки не налаштовано redirect URI для Google OAuth.
+  // TODO: прибрати після переходу на Google-логін.
+  signInWithPassword: (email: string, password: string) =>
+    supabase.auth.signInWithPassword({ email, password }),
+
+  // Реєстрація тестового користувача (той самий email/password флоу).
+  signUpWithPassword: (email: string, password: string) =>
+    supabase.auth.signUp({ email, password }),
+
   getSession: () => supabase.auth.getSession(),
 
   // Підписка на зміни стану авторизації (логін / логаут / оновлення токена).

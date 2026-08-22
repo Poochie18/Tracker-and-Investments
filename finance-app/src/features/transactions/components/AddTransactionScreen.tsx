@@ -1,15 +1,16 @@
 import { useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Check, Calculator, ChevronDown, ChevronUp } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { useAccount } from '@/hooks/use-account'
 import { useCategoriesByType } from '@/hooks/use-categories'
-import { useCreateTransaction } from '@/hooks/use-transactions'
+import { useCreateTransaction, useUpdateTransaction, useTransaction } from '@/hooks/use-transactions'
 import { CategoryIconCircle } from './CategoryIconCircle'
 import { ExpenseIncomeTabs } from './ExpenseIncomeTabs'
 import { QuickDateSelector } from './QuickDateSelector'
 import { CalculatorKeyboard } from './CalculatorKeyboard'
 import { SyncStatusIndicator } from '@/components/SyncStatusIndicator'
+import type { LocalTransaction, TransactionType } from '@/lib/db/schema'
 
 // Кількість видимих рядків категорій за замовчуванням
 const COLS = 4
@@ -28,27 +29,48 @@ function parseAmount(expr: string): number {
   }
 }
 
+// Обгортка-роутер: чекає завантаження транзакції при редагуванні (Dexie —
+// асинхронний), а саму форму монтує з key={id ?? 'new'} — тому TransactionForm
+// ініціалізує свій стан напряму з даних, без setState всередині ефекту.
 export function AddTransactionScreen() {
+  const { id } = useParams<{ id?: string }>()
+  const isEdit = !!id
+  const { data: existing, isLoading } = useTransaction(id)
+
+  if (isEdit && isLoading) return null
+
+  return <TransactionForm key={id ?? 'new'} id={id} existing={existing} />
+}
+
+interface TransactionFormProps {
+  id: string | undefined
+  existing: LocalTransaction | undefined
+}
+
+function TransactionForm({ id, existing }: TransactionFormProps) {
   const navigate = useNavigate()
+  const isEdit = !!id
   const { user } = useAuth()
   const { data: account } = useAccount(user?.id)
   const createTransaction = useCreateTransaction(user?.id ?? '')
+  const updateTransaction = useUpdateTransaction(user?.id ?? '')
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const [type, setType] = useState<'expense' | 'income'>('expense')
-  const [amountStr, setAmountStr] = useState('')
+  const [type, setType] = useState<TransactionType>(existing?.type ?? 'expense')
+  const [amountStr, setAmountStr] = useState(existing ? String(existing.amount / 100) : '')
   const [showCalc, setShowCalc] = useState(false)
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null)
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(existing?.category_id ?? null)
   const [categoriesExpanded, setCategoriesExpanded] = useState(false)
-  const [date, setDate] = useState<Date>(new Date())
-  const [comment, setComment] = useState('')
+  const [date, setDate] = useState<Date>(existing ? new Date(existing.date) : new Date())
+  const [comment, setComment] = useState(existing?.comment ?? '')
   const [error, setError] = useState<string | null>(null)
 
   const { data: categories = [] } = useCategoriesByType(user?.id, type)
   const visibleCategories = categoriesExpanded ? categories : categories.slice(0, MAX_VISIBLE)
   const hasMore = categories.length > MAX_VISIBLE
+  const isSaving = createTransaction.isPending || updateTransaction.isPending
 
-  const handleTypeChange = (newType: 'expense' | 'income') => {
+  const handleTypeChange = (newType: TransactionType) => {
     setType(newType)
     setSelectedCategoryId(null)
     setCategoriesExpanded(false)
@@ -83,15 +105,29 @@ export function AddTransactionScreen() {
     }
 
     try {
-      await createTransaction.mutateAsync({
-        account_id: account.id,
-        category_id: selectedCategoryId,
-        type,
-        amount: Math.round(amountUah * 100),
-        date,
-        comment: comment.trim() || undefined,
-      })
-      navigate('/overview')
+      if (isEdit && id) {
+        await updateTransaction.mutateAsync({
+          id,
+          data: {
+            category_id: selectedCategoryId,
+            type,
+            amount: Math.round(amountUah * 100),
+            date: date.toISOString(),
+            comment: comment.trim() || undefined,
+          },
+        })
+        navigate(-1)
+      } else {
+        await createTransaction.mutateAsync({
+          account_id: account.id,
+          category_id: selectedCategoryId,
+          type,
+          amount: Math.round(amountUah * 100),
+          date,
+          comment: comment.trim() || undefined,
+        })
+        navigate('/overview')
+      }
     } catch {
       setError('Не вдалось зберегти. Спробуй ще раз.')
     }
@@ -114,7 +150,7 @@ export function AddTransactionScreen() {
           <ArrowLeft size={22} color="var(--color-text-primary)" />
         </button>
         <h1 className="text-lg font-semibold flex-1" style={{ color: 'var(--color-text-primary)' }}>
-          Нова транзакція
+          {isEdit ? 'Редагувати транзакцію' : 'Нова транзакція'}
         </h1>
         <SyncStatusIndicator />
       </div>
@@ -278,12 +314,12 @@ export function AddTransactionScreen() {
         <div className="px-4 pb-4">
           <button
             onClick={handleSave}
-            disabled={createTransaction.isPending}
+            disabled={isSaving}
             className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-semibold text-base transition-opacity disabled:opacity-60"
             style={{ backgroundColor: 'var(--color-accent)', color: '#1B2A2A' }}
           >
             <Check size={20} />
-            {createTransaction.isPending ? 'Зберігаємо...' : 'Зберегти'}
+            {isSaving ? 'Зберігаємо...' : 'Зберегти'}
           </button>
         </div>
       </div>

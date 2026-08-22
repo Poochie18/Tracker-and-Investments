@@ -5,7 +5,8 @@ import { db } from '@/lib/db'
 import { onlineDetector } from './online-detector'
 import { flushSyncQueue, hasPendingRecords } from './sync-queue'
 import { resolveConflict } from './conflict-resolver'
-import type { LocalTransaction, LocalCategory, LocalAccount } from '@/lib/db/schema'
+import { isDevOfflineMode } from '@/lib/auth/dev-bypass'
+import type { LocalTransaction, LocalCategory, LocalAccount, LocalInvestment } from '@/lib/db/schema'
 
 // ============================================================
 // SyncEngine — центральний оркестратор синхронізації.
@@ -51,6 +52,13 @@ export class SyncEngine {
   // ── Старт ────────────────────────────────────────────────
 
   async start(): Promise<void> {
+    // Dev офлайн-режим — не звертаємось до Supabase взагалі,
+    // працюємо тільки з Dexie. UI показує стан 'idle', ніби все синхронізовано.
+    if (isDevOfflineMode()) {
+      this.onStateChange('idle')
+      return
+    }
+
     // Слухаємо зміни мережі
     onlineDetector.subscribe((isOnline) => {
       if (isOnline) {
@@ -95,6 +103,7 @@ export class SyncEngine {
 
   // Публічний метод — викликається після кожного локального запису
   async triggerSync(): Promise<void> {
+    if (isDevOfflineMode()) return
     if (onlineDetector.isOnline) {
       await this.sync()
     } else {
@@ -150,6 +159,7 @@ export class SyncEngine {
       this.pullAccounts(),
       this.pullCategories(),
       this.pullTransactions(),
+      this.pullInvestments(),
     ])
 
     this.invalidateQueries()
@@ -223,6 +233,24 @@ export class SyncEngine {
     }
   }
 
+  private async pullInvestments(): Promise<void> {
+    const { data } = await supabase
+      .from('investments')
+      .select('*')
+      .eq('user_id', this.userId)
+
+    if (!data) return
+
+    const localInvestments: LocalInvestment[] = data.map((inv) => ({
+      ...inv,
+      _sync_status: 'synced' as const,
+      _sync_error: null,
+      _local_updated_at: Date.now(),
+    }))
+
+    await db.investments.bulkPut(localInvestments)
+  }
+
   // ── Realtime Subscription ─────────────────────────────────
   //
   // Supabase надсилає події при будь-якій зміні в БД (INSERT/UPDATE/DELETE).
@@ -252,6 +280,17 @@ export class SyncEngine {
           filter: `user_id=eq.${this.userId}`,
         },
         (payload) => void this.handleCategoryChange(payload)
+      )
+      // Підписуємось на зміни інвестицій (напр. оновлення ціни з іншого пристрою)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'investments',
+          filter: `user_id=eq.${this.userId}`,
+        },
+        (payload) => void this.handleInvestmentChange(payload)
       )
       .subscribe()
   }
@@ -306,10 +345,35 @@ export class SyncEngine {
     this.invalidateQueries()
   }
 
+  private async handleInvestmentChange(
+    payload: { eventType: string; new: Record<string, unknown> }
+  ): Promise<void> {
+    const { eventType, new: newRecord } = payload
+    if (eventType === 'DELETE') return
+
+    const remoteData = newRecord as unknown as LocalInvestment
+    const localRecord = await db.investments.get(remoteData.id)
+
+    if (localRecord && localRecord._sync_status === 'pending') {
+      const winner = resolveConflict(localRecord, remoteData)
+      if (winner === 'local') return
+    }
+
+    await db.investments.put({
+      ...remoteData,
+      _sync_status: 'synced',
+      _sync_error: null,
+      _local_updated_at: Date.now(),
+    })
+
+    this.invalidateQueries()
+  }
+
   // Інвалідуємо TanStack Query кеш → компоненти перечитують з Dexie
   private invalidateQueries(): void {
     void this.queryClient.invalidateQueries({ queryKey: ['transactions'] })
     void this.queryClient.invalidateQueries({ queryKey: ['categories'] })
     void this.queryClient.invalidateQueries({ queryKey: ['account'] })
+    void this.queryClient.invalidateQueries({ queryKey: ['investments'] })
   }
 }

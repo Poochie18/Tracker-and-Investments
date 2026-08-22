@@ -1,31 +1,43 @@
 import { useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/use-auth'
 import { useAccount } from '@/hooks/use-account'
 import { useTransactions } from '@/hooks/use-transactions'
 import { useCategories } from '@/hooks/use-categories'
 import { useUIStore } from '@/stores/ui-store'
+import { useFilterStore } from '@/stores/filter-store'
 import { getPeriodRange, formatPeriodHeader } from '@/lib/utils/dates'
 import { Money } from '@/lib/utils/money'
 import { ExpenseIncomeTabs } from './ExpenseIncomeTabs'
 import { PeriodSelector } from './PeriodSelector'
+import { PeriodNavigator } from './PeriodNavigator'
 import { DonutChart } from './DonutChart'
 import { CategoryListItem } from './CategoryListItem'
 import { SyncStatusIndicator } from '@/components/SyncStatusIndicator'
 import type { LocalCategory } from '@/lib/db/schema'
 
 export function OverviewScreen() {
+  const navigate = useNavigate()
   const { user } = useAuth()
   void useAccount(user?.id)
   const activeTab = useUIStore((s) => s.activeTab)
   const setActiveTab = useUIStore((s) => s.setActiveTab)
   const selectedPeriod = useUIStore((s) => s.selectedPeriod)
   const setSelectedPeriod = useUIStore((s) => s.setSelectedPeriod)
+  const periodAnchor = useUIStore((s) => s.periodAnchor)
+  const setPeriodAnchor = useUIStore((s) => s.setPeriodAnchor)
   const customFrom = useUIStore((s) => s.customFrom)
   const customTo = useUIStore((s) => s.customTo)
+  const setCategoryFilter = useFilterStore((s) => s.setCategoryFilter)
 
   const customRange = customFrom && customTo ? { from: customFrom, to: customTo } : null
-  const { from, to } = getPeriodRange(selectedPeriod, new Date(), customRange)
-  const periodHeader = formatPeriodHeader(selectedPeriod, new Date(), customRange)
+  const { from, to } = getPeriodRange(selectedPeriod, periodAnchor, customRange)
+  const periodHeader = formatPeriodHeader(selectedPeriod, periodAnchor, customRange)
+
+  const handleCategoryPress = (categoryId: string) => {
+    setCategoryFilter(categoryId)
+    navigate('/list')
+  }
 
   const { data: transactions = [] } = useTransactions({
     userId: user?.id ?? '',
@@ -94,11 +106,14 @@ export function OverviewScreen() {
           paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)',
         }}
       >
-        {/* Дата по центру + sync справа */}
+        {/* Дата по центру (зі стрілками навігації) + sync справа */}
         <div className="relative flex items-center justify-center mb-2">
-          <p className="text-sm font-medium" style={{ color: 'rgba(255,255,255,0.6)' }}>
-            {periodHeader}
-          </p>
+          <PeriodNavigator
+            period={selectedPeriod}
+            anchor={periodAnchor}
+            label={periodHeader}
+            onAnchorChange={setPeriodAnchor}
+          />
           <div className="absolute right-0">
             <SyncStatusIndicator />
           </div>
@@ -155,6 +170,7 @@ export function OverviewScreen() {
                 category={g.category}
                 amount={g.amount}
                 percentage={g.percentage}
+                onPress={() => handleCategoryPress(g.category.id)}
               />
               {i < categoryTotals.length - 1 && (
                 <div

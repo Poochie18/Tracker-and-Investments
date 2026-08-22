@@ -13,7 +13,8 @@ import { TransactionsListScreen } from '@/features/transactions/components/Trans
 import { SettingsScreen } from '@/features/settings/components/SettingsScreen'
 import { ManageCategoriesScreen } from '@/features/settings/components/ManageCategoriesScreen'
 import { BackupScreen } from '@/features/settings/components/BackupScreen'
-import { InvestmentsPlaceholder } from '@/features/investments/components/InvestmentsPlaceholder'
+import { InvestmentsScreen } from '@/features/investments/components/InvestmentsScreen'
+import { AddInvestmentScreen } from '@/features/investments/components/AddInvestmentScreen'
 import { useUIStore } from '@/stores/ui-store'
 
 const queryClient = new QueryClient({
@@ -58,8 +59,11 @@ export default function App() {
               <Route index element={<Navigate to="/overview" replace />} />
               <Route path="/overview" element={<OverviewScreen />} />
               <Route path="/add" element={<AddTransactionScreen />} />
+              <Route path="/transactions/:id/edit" element={<AddTransactionScreen />} />
               <Route path="/list" element={<TransactionsListScreen />} />
-              <Route path="/investments" element={<InvestmentsPlaceholder />} />
+              <Route path="/investments" element={<InvestmentsScreen />} />
+              <Route path="/investments/add" element={<AddInvestmentScreen />} />
+              <Route path="/investments/:id/edit" element={<AddInvestmentScreen />} />
               <Route path="/settings" element={<SettingsScreen />} />
               <Route path="/settings/categories" element={<ManageCategoriesScreen />} />
               <Route path="/settings/backup" element={<BackupScreen />} />

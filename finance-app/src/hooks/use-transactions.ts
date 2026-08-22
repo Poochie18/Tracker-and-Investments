@@ -23,6 +23,15 @@ export function useTransactions(filter: TransactionFilter) {
   })
 }
 
+// Одна транзакція за id — для екрану редагування
+export function useTransaction(id: string | undefined) {
+  return useQuery({
+    queryKey: ['transaction', id],
+    queryFn: () => transactionsRepo.getById(id!),
+    enabled: !!id,
+  })
+}
+
 // Сума по типу за фільтром (для показу балансу)
 export function useTransactionSum(filter: TransactionFilter, type: TransactionType) {
   return useQuery({

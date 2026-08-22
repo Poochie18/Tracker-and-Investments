@@ -9,6 +9,12 @@ interface UIStore {
   selectedPeriod: PeriodType
   setSelectedPeriod: (period: PeriodType) => void
 
+  // Якір, відносно якого рахується день/тиждень/місяць/рік (навігація "вперед-назад").
+  // Для 'custom' не використовується — там свій діапазон customFrom/customTo.
+  periodAnchor: Date
+  setPeriodAnchor: (date: Date) => void
+  goToToday: () => void
+
   // Кастомний діапазон (активний тільки коли selectedPeriod === 'custom')
   customFrom: Date | null
   customTo: Date | null
@@ -23,7 +29,13 @@ interface UIStore {
 
 export const useUIStore = create<UIStore>((set) => ({
   selectedPeriod: 'month',
-  setSelectedPeriod: (period) => set({ selectedPeriod: period }),
+  // Зміна типу періоду скидає якір на сьогодні — інакше перемикання
+  // з "День" (у минулому) на "Місяць" показало б чужий місяць.
+  setSelectedPeriod: (period) => set({ selectedPeriod: period, periodAnchor: new Date() }),
+
+  periodAnchor: new Date(),
+  setPeriodAnchor: (date) => set({ periodAnchor: date }),
+  goToToday: () => set({ periodAnchor: new Date() }),
 
   customFrom: null,
   customTo: null,

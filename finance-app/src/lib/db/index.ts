@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie'
-import type { LocalAccount, LocalCategory, LocalTransaction, LocalTag } from './schema'
+import type { LocalAccount, LocalCategory, LocalTransaction, LocalTag, LocalInvestment } from './schema'
 
 // ============================================================
 // Dexie — обгортка над IndexedDB для зручної роботи з локальною БД.
@@ -12,6 +12,7 @@ export class FinanceDB extends Dexie {
   categories!: EntityTable<LocalCategory, 'id'>
   transactions!: EntityTable<LocalTransaction, 'id'>
   tags!: EntityTable<LocalTag, 'id'>
+  investments!: EntityTable<LocalInvestment, 'id'>
 
   constructor() {
     super('finance-app-db')
@@ -35,6 +36,15 @@ export class FinanceDB extends Dexie {
       categories: '&id, user_id, type, [user_id+type], sort_order, _sync_status',
       transactions: '&id, user_id, account_id, category_id, date, deleted_at, _sync_status',
       tags: '&id, user_id, name',
+    })
+
+    // v3: додаємо таблицю investments (Фаза 7 — модуль інвестицій)
+    this.version(3).stores({
+      accounts: '&id, user_id, _sync_status',
+      categories: '&id, user_id, type, [user_id+type], sort_order, _sync_status',
+      transactions: '&id, user_id, account_id, category_id, date, deleted_at, _sync_status',
+      tags: '&id, user_id, name',
+      investments: '&id, user_id, type, deleted_at, _sync_status',
     })
   }
 }

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Wallet } from 'lucide-react'
 import { authClient } from '@/lib/auth/auth-client'
+import { enableDevOfflineMode } from '@/lib/auth/dev-bypass'
 
 export function LoginScreen() {
   const [loading, setLoading] = useState(false)
@@ -20,6 +21,8 @@ export function LoginScreen() {
     }
     // При успіху — браузер перейде на Google, повернеться на /auth/callback
   }
+
+  const showDevLogin = import.meta.env.DEV
 
   return (
     <div
@@ -72,7 +75,114 @@ export function LoginScreen() {
         <p className="text-xs text-center" style={{ color: 'var(--color-text-secondary)' }}>
           Ваші дані зберігаються тільки на вашому акаунті і захищені Google OAuth
         </p>
+
+        {showDevLogin && (
+          <button
+            onClick={() => {
+              enableDevOfflineMode()
+              window.location.href = '/overview'
+            }}
+            className="w-full py-2.5 rounded-xl text-sm font-medium mt-1"
+            style={{ backgroundColor: 'var(--color-bg-header)', color: 'var(--color-text-secondary)' }}
+          >
+            DEV: Працювати офлайн (без Supabase)
+          </button>
+        )}
+
+        {showDevLogin && <DevPasswordLogin />}
       </div>
+    </div>
+  )
+}
+
+// ============================================================
+// Тимчасовий email/password вхід для локального тестування,
+// поки не налаштовано redirect URI для Google OAuth.
+// Рендериться тільки в dev-режимі (import.meta.env.DEV) —
+// у production-збірці цей блок відсутній.
+// TODO: прибрати після переходу на Google-логін.
+// ============================================================
+function DevPasswordLogin() {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [info, setInfo] = useState<string | null>(null)
+
+  const handleSignIn = async () => {
+    setLoading(true)
+    setError(null)
+    setInfo(null)
+    const { error } = await authClient.signInWithPassword(email, password)
+    if (error) setError(error.message)
+    setLoading(false)
+  }
+
+  const handleSignUp = async () => {
+    setLoading(true)
+    setError(null)
+    setInfo(null)
+    const { error } = await authClient.signUpWithPassword(email, password)
+    if (error) {
+      setError(error.message)
+    } else {
+      setInfo('Тестового користувача створено. Якщо потрібне підтвердження email — перевір пошту, інакше просто натисни "Увійти".')
+    }
+    setLoading(false)
+  }
+
+  return (
+    <div
+      className="w-full flex flex-col gap-3 mt-2 p-4 rounded-2xl"
+      style={{ backgroundColor: 'var(--color-bg-header)' }}
+    >
+      <p className="text-xs text-center" style={{ color: 'var(--color-text-secondary)' }}>
+        DEV: тестовий вхід через email/password
+      </p>
+      <input
+        type="email"
+        placeholder="test@example.com"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        className="w-full py-2.5 px-4 rounded-xl text-sm"
+        style={{ backgroundColor: 'var(--color-bg-card)', color: 'var(--color-text-primary)' }}
+      />
+      <input
+        type="password"
+        placeholder="пароль (мін. 6 символів)"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        className="w-full py-2.5 px-4 rounded-xl text-sm"
+        style={{ backgroundColor: 'var(--color-bg-card)', color: 'var(--color-text-primary)' }}
+      />
+      <div className="flex gap-2">
+        <button
+          onClick={handleSignUp}
+          disabled={loading || !email || password.length < 6}
+          className="flex-1 py-2.5 rounded-xl text-sm font-medium disabled:opacity-50"
+          style={{ backgroundColor: 'var(--color-bg-card)', color: 'var(--color-text-primary)' }}
+        >
+          Створити
+        </button>
+        <button
+          onClick={handleSignIn}
+          disabled={loading || !email || password.length < 6}
+          className="flex-1 py-2.5 rounded-xl text-sm font-medium disabled:opacity-50"
+          style={{ backgroundColor: 'var(--color-accent)', color: '#1B2A2A' }}
+        >
+          Увійти
+        </button>
+      </div>
+      {info && (
+        <p className="text-xs text-center" style={{ color: 'var(--color-accent)' }}>
+          {info}
+        </p>
+      )}
+      {error && (
+        <p className="text-xs text-center" style={{ color: 'var(--color-expense)' }}>
+          {error}
+        </p>
+      )}
     </div>
   )
 }

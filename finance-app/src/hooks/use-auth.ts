@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import type { User } from '@supabase/supabase-js'
 import { authClient } from '@/lib/auth/auth-client'
+import { DEV_USER, disableDevOfflineMode, isDevOfflineMode } from '@/lib/auth/dev-bypass'
 
 export interface UseAuthReturn {
   user: User | null
@@ -15,6 +16,13 @@ export function useAuth(): UseAuthReturn {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // Dev офлайн-режим — не звертаємось до Supabase взагалі.
+    if (isDevOfflineMode()) {
+      setUser(DEV_USER)
+      setLoading(false)
+      return
+    }
+
     // Одразу отримуємо поточну сесію з localStorage (без мережевого запиту)
     authClient.getSession().then(({ data }) => {
       setUser(data.session?.user ?? null)
@@ -34,6 +42,11 @@ export function useAuth(): UseAuthReturn {
   }, [])
 
   const signOut = useCallback(async () => {
+    if (isDevOfflineMode()) {
+      disableDevOfflineMode()
+      window.location.reload()
+      return
+    }
     await authClient.signOut()
   }, [])
 

@@ -25,9 +25,12 @@ export const DEFAULT_EXPENSE_CATEGORIES: CategorySeed[] = [
   { name: 'Подарунки',          type: 'expense', icon_name: 'Gift',            color_hex: '#E91E63' },
   { name: 'Подорожі',           type: 'expense', icon_name: 'Plane',           color_hex: '#4A90E2' },
   { name: 'Техніка',            type: 'expense', icon_name: 'Laptop',          color_hex: '#607D8B' },
-  { name: 'Хоз товари',         type: 'expense', icon_name: 'Wrench',          color_hex: '#9CB861' },
+  { name: 'Господарські товари', type: 'expense', icon_name: 'Wrench',         color_hex: '#9CB861' },
   { name: 'Сім\'я',             type: 'expense', icon_name: 'Users',           color_hex: '#E74C3C' },
   { name: 'Депозит',            type: 'expense', icon_name: 'Landmark',        color_hex: '#F4B942' },
+  { name: 'Рахунки',            type: 'expense', icon_name: 'Receipt',         color_hex: '#4A90E2' },
+  { name: 'Маша',               type: 'expense', icon_name: 'User',            color_hex: '#E91E63' },
+  { name: 'Весілля',            type: 'expense', icon_name: 'Gem',             color_hex: '#F4B942' },
   { name: 'Інше',               type: 'expense', icon_name: 'MoreHorizontal',  color_hex: '#B0B0B0' },
 ]
 

@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { supabase } from '@/lib/supabase'
 import { db } from '@/lib/db'
 import { ALL_DEFAULT_CATEGORIES } from '@/lib/db/seed'
+import { isDevOfflineMode } from '@/lib/auth/dev-bypass'
 import type { LocalAccount, LocalCategory } from '@/lib/db/schema'
 
 // Видаляє дублікати категорій, залишаючи по одному запису на (name+type).
@@ -37,9 +38,11 @@ export async function deduplicateCategories(userId: string): Promise<number> {
           _local_updated_at: Date.now(),
         })
       }
-      // Видаляємо з Dexie і Supabase
+      // Видаляємо з Dexie і Supabase (в dev офлайн-режимі — тільки локально)
       await db.categories.delete(del.id)
-      await supabase.from('categories').delete().eq('id', del.id)
+      if (!isDevOfflineMode()) {
+        await supabase.from('categories').delete().eq('id', del.id)
+      }
       removed++
     }
   }
@@ -48,6 +51,12 @@ export async function deduplicateCategories(userId: string): Promise<number> {
 }
 
 export async function isFirstLogin(userId: string): Promise<boolean> {
+  // Dev офлайн-режим — перевіряємо тільки локальну Dexie, без Supabase.
+  if (isDevOfflineMode()) {
+    const localCount = await db.accounts.where('user_id').equals(userId).count()
+    return localCount === 0
+  }
+
   const { data, error } = await supabase
     .from('accounts')
     .select('id')
@@ -61,30 +70,42 @@ export async function isFirstLogin(userId: string): Promise<boolean> {
 // При першому вході: створюємо рахунок і категорії в Supabase,
 // а потім одразу зберігаємо їх у Dexie зі статусом 'synced'.
 // Це критично — без Dexie запису UI не побачить жодних даних.
+//
+// В dev офлайн-режимі Supabase-виклики пропускаються, а записи
+// одразу створюються локально зі статусом 'pending' — вони підуть
+// на сервер, коли синк-двигун знову ввімкнеться.
 export async function setupFirstLogin(userId: string): Promise<void> {
+  const offline = isDevOfflineMode()
+
   // Другий захист: якщо категорії вже є в Supabase — хтось встиг створити їх раніше
-  const { data: existingCats } = await supabase
-    .from('categories')
-    .select('id')
-    .eq('user_id', userId)
-    .limit(1)
-  if (existingCats && existingCats.length > 0) return
+  if (!offline) {
+    const { data: existingCats } = await supabase
+      .from('categories')
+      .select('id')
+      .eq('user_id', userId)
+      .limit(1)
+    if (existingCats && existingCats.length > 0) return
+  }
 
   const now = new Date().toISOString()
   const localNow = Date.now()
+  const syncStatus = offline ? ('pending' as const) : ('synced' as const)
 
   // ── Крок 1: Рахунок ──────────────────────────────────────
   const accountId = uuidv4()
-  const { error: accountError } = await supabase.from('accounts').insert({
-    id: accountId,
-    user_id: userId,
-    name: 'Головний',
-    currency: 'UAH',
-    is_archived: false,
-    created_at: now,
-    updated_at: now,
-  })
-  if (accountError) throw accountError
+
+  if (!offline) {
+    const { error: accountError } = await supabase.from('accounts').insert({
+      id: accountId,
+      user_id: userId,
+      name: 'Головний',
+      currency: 'UAH',
+      is_archived: false,
+      created_at: now,
+      updated_at: now,
+    })
+    if (accountError) throw accountError
+  }
 
   const localAccount: LocalAccount = {
     id: accountId,
@@ -94,7 +115,7 @@ export async function setupFirstLogin(userId: string): Promise<void> {
     is_archived: false,
     created_at: now,
     updated_at: now,
-    _sync_status: 'synced',
+    _sync_status: syncStatus,
     _sync_error: null,
     _local_updated_at: localNow,
   }
@@ -115,12 +136,14 @@ export async function setupFirstLogin(userId: string): Promise<void> {
     updated_at: now,
   }))
 
-  const { error: categoriesError } = await supabase.from('categories').insert(categories)
-  if (categoriesError) throw categoriesError
+  if (!offline) {
+    const { error: categoriesError } = await supabase.from('categories').insert(categories)
+    if (categoriesError) throw categoriesError
+  }
 
   const localCategories: LocalCategory[] = categories.map((cat) => ({
     ...cat,
-    _sync_status: 'synced',
+    _sync_status: syncStatus,
     _sync_error: null,
     _local_updated_at: localNow,
   }))

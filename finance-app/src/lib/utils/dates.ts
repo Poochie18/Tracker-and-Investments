@@ -4,6 +4,8 @@ import {
   startOfMonth, endOfMonth,
   startOfYear, endOfYear,
   format, isToday, isYesterday, subDays,
+  addDays, addWeeks, subWeeks, addMonths, subMonths, addYears, subYears,
+  isSameDay, isSameWeek, isSameMonth, isSameYear,
 } from 'date-fns'
 import { uk } from 'date-fns/locale'
 import type { PeriodType } from '@/stores/ui-store'
@@ -69,6 +71,42 @@ export function formatPeriodHeader(
       return format(anchor, 'LLLL yyyy', { locale: uk })
     default:
       return format(anchor, 'LLLL yyyy', { locale: uk })
+  }
+}
+
+// Зсуває якір періоду на один крок вперед/назад — для навігації
+// "‹ попередній / наступний ›" на Overview і в списку транзакцій.
+// 'custom' і 'year' навмисно без спеціальної обробки в UI (рік теж підтримуємо тут для повноти).
+export function shiftPeriodAnchor(period: PeriodType, anchor: Date, direction: 1 | -1): Date {
+  switch (period) {
+    case 'day':
+      return direction === 1 ? addDays(anchor, 1) : subDays(anchor, 1)
+    case 'week':
+      return direction === 1 ? addWeeks(anchor, 1) : subWeeks(anchor, 1)
+    case 'month':
+      return direction === 1 ? addMonths(anchor, 1) : subMonths(anchor, 1)
+    case 'year':
+      return direction === 1 ? addYears(anchor, 1) : subYears(anchor, 1)
+    default:
+      return anchor
+  }
+}
+
+// Чи анкер вказує на "поточний" день/тиждень/місяць/рік — щоб ховати
+// кнопку "Сьогодні", коли й так дивимось на актуальний період.
+export function isCurrentPeriod(period: PeriodType, anchor: Date): boolean {
+  const now = new Date()
+  switch (period) {
+    case 'day':
+      return isSameDay(anchor, now)
+    case 'week':
+      return isSameWeek(anchor, now, { weekStartsOn: 1 })
+    case 'month':
+      return isSameMonth(anchor, now)
+    case 'year':
+      return isSameYear(anchor, now)
+    default:
+      return true
   }
 }
 

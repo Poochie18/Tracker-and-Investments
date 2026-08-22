@@ -51,6 +51,25 @@ export interface Transaction {
   deleted_at: string | null  // null = активна, не-null = видалена (soft delete)
 }
 
+// Тип інвестиційного активу
+export type InvestmentType = 'stock' | 'crypto' | 'bond' | 'deposit' | 'other'
+
+export interface Investment {
+  id: string
+  user_id: string
+  name: string          // напр. "Apple Inc." або "Bitcoin"
+  type: InvestmentType
+  quantity: number       // кількість одиниць/акцій/монет (може бути дробовою)
+  purchase_price: number // ЗАВЖДИ у копійках (мінімальних одиницях валюти)! Ціна за одиницю на момент купівлі.
+  current_price: number  // ЗАВЖДИ у копійках! Поточна ціна за одиницю — оновлюється вручну.
+  currency: string       // валюта активу, напр. 'UAH', 'USD'
+  purchase_date: string  // ISO 8601
+  notes: string | null
+  created_at: string
+  updated_at: string
+  deleted_at: string | null  // null = активна, не-null = видалена (soft delete)
+}
+
 export interface Tag {
   id: string
   user_id: string
@@ -80,6 +99,12 @@ export interface LocalCategory extends Category {
 }
 
 export interface LocalTransaction extends Transaction {
+  _sync_status: SyncStatus
+  _sync_error: string | null
+  _local_updated_at: number
+}
+
+export interface LocalInvestment extends Investment {
   _sync_status: SyncStatus
   _sync_error: string | null
   _local_updated_at: number

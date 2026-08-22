@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import { BarChart2, PlusCircle, TrendingUp, Settings, List } from 'lucide-react'
+import { useFilterStore } from '@/stores/filter-store'
 
 // Конфігурація вкладок нижньої навігації
 const NAV_ITEMS = [
@@ -14,6 +15,14 @@ interface BottomNavProps {
 }
 
 export function BottomNav({ onAddClick }: BottomNavProps) {
+  const setCategoryFilter = useFilterStore((s) => s.setCategoryFilter)
+
+  // Прямий перехід у "Список" з нижньої навігації — це не drill-down
+  // з категорії, тому фільтр категорії (якщо лишився з Overview) скидаємо.
+  const handleNavClick = (to: string) => {
+    if (to === '/list') setCategoryFilter(null)
+  }
+
   return (
     <nav
       className="fixed bottom-0 left-0 right-0 flex items-center justify-around"
@@ -26,7 +35,7 @@ export function BottomNav({ onAddClick }: BottomNavProps) {
       }}
     >
       {NAV_ITEMS.slice(0, 2).map(({ to, icon: Icon, label }) => (
-        <NavItem key={to} to={to} icon={Icon} label={label} />
+        <NavItem key={to} to={to} icon={Icon} label={label} onClick={() => handleNavClick(to)} />
       ))}
 
       {/* Кнопка FAB посередині */}
@@ -40,7 +49,7 @@ export function BottomNav({ onAddClick }: BottomNavProps) {
       </button>
 
       {NAV_ITEMS.slice(2).map(({ to, icon: Icon, label }) => (
-        <NavItem key={to} to={to} icon={Icon} label={label} />
+        <NavItem key={to} to={to} icon={Icon} label={label} onClick={() => handleNavClick(to)} />
       ))}
     </nav>
   )
@@ -50,12 +59,14 @@ interface NavItemProps {
   to: string
   icon: React.ComponentType<{ size?: number; color?: string }>
   label: string
+  onClick?: () => void
 }
 
-function NavItem({ to, icon: Icon, label }: NavItemProps) {
+function NavItem({ to, icon: Icon, label, onClick }: NavItemProps) {
   return (
     <NavLink
       to={to}
+      onClick={onClick}
       className={({ isActive }) =>
         `flex flex-col items-center gap-0.5 px-3 py-2 text-xs transition-colors ${
           isActive

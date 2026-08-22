@@ -1,9 +1,14 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight, Tag, Archive, LogOut, Info, Wrench } from 'lucide-react'
+import { ChevronRight, Tag, Archive, LogOut, Info, Wrench, FlaskConical, Trash2, UploadCloud } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { useQueryClient } from '@tanstack/react-query'
 import { deduplicateCategories } from '@/lib/auth/first-login-setup'
+import { syncDefaultCategories } from '@/lib/db/category-sync'
+import { seedDevTestData, clearAllTransactions } from '@/lib/db/dev-seed-generator'
+import { importRealTransactions, importRealInvestments } from '@/lib/db/dev-real-data-importer'
+import { transactionKeys } from '@/hooks/use-transactions'
+import { investmentKeys } from '@/hooks/use-investments'
 
 export function SettingsScreen() {
   const navigate = useNavigate()
@@ -13,6 +18,12 @@ export function SettingsScreen() {
   const [showConfirm, setShowConfirm] = useState(false)
   const [dedupMsg, setDedupMsg] = useState<string | null>(null)
   const [deduping, setDeduping] = useState(false)
+  const [syncingCats, setSyncingCats] = useState(false)
+  const [syncCatsMsg, setSyncCatsMsg] = useState<string | null>(null)
+  const [seeding, setSeeding] = useState(false)
+  const [seedMsg, setSeedMsg] = useState<string | null>(null)
+  const [importing, setImporting] = useState(false)
+  const [importMsg, setImportMsg] = useState<string | null>(null)
 
   const handleDedup = async () => {
     if (!user) return
@@ -27,6 +38,94 @@ export function SettingsScreen() {
       setDedupMsg('Помилка при очищенні')
     } finally {
       setDeduping(false)
+    }
+  }
+
+  const handleSyncCategories = async () => {
+    if (!user) return
+    setSyncingCats(true)
+    setSyncCatsMsg(null)
+    try {
+      const { renamed, created } = await syncDefaultCategories(user.id)
+      void queryClient.invalidateQueries({ queryKey: ['categories'] })
+      void queryClient.invalidateQueries({ queryKey: ['categories-all', user.id] })
+      if (renamed === 0 && created === 0) {
+        setSyncCatsMsg('Все вже актуально')
+      } else {
+        setSyncCatsMsg(`Додано ${created}, перейменовано ${renamed}`)
+      }
+    } catch {
+      setSyncCatsMsg('Помилка синхронізації')
+    } finally {
+      setSyncingCats(false)
+    }
+  }
+
+  const invalidateAllTransactionData = () => {
+    if (!user) return
+    void queryClient.invalidateQueries({ queryKey: transactionKeys.all(user.id) })
+    void queryClient.invalidateQueries({ queryKey: ['account', user.id] })
+  }
+
+  const handleSeed = async () => {
+    if (!user) return
+    setSeeding(true)
+    setSeedMsg(null)
+    try {
+      const count = await seedDevTestData(user.id)
+      invalidateAllTransactionData()
+      setSeedMsg(`Створено ${count} транзакцій за останні 90 днів`)
+    } catch (err) {
+      setSeedMsg(err instanceof Error ? err.message : 'Помилка генерації даних')
+    } finally {
+      setSeeding(false)
+    }
+  }
+
+  const handleClearTransactions = async () => {
+    if (!user) return
+    setSeeding(true)
+    setSeedMsg(null)
+    try {
+      const count = await clearAllTransactions(user.id)
+      invalidateAllTransactionData()
+      setSeedMsg(`Видалено ${count} транзакцій`)
+    } catch (err) {
+      setSeedMsg(err instanceof Error ? err.message : 'Помилка видалення')
+    } finally {
+      setSeeding(false)
+    }
+  }
+
+  const handleImportRealTransactions = async () => {
+    if (!user) return
+    setImporting(true)
+    setImportMsg(null)
+    try {
+      const { created, skipped } = await importRealTransactions(user.id)
+      invalidateAllTransactionData()
+      setImportMsg(
+        `Імпортовано ${created} транзакцій` + (skipped > 0 ? ` (пропущено ${skipped} — категорію не знайдено)` : '')
+      )
+    } catch (err) {
+      setImportMsg(err instanceof Error ? err.message : 'Помилка імпорту')
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  const handleImportRealInvestments = async () => {
+    if (!user) return
+    setImporting(true)
+    setImportMsg(null)
+    try {
+      const count = await importRealInvestments(user.id)
+      void queryClient.invalidateQueries({ queryKey: investmentKeys.all(user.id) })
+      setImportMsg(`Імпортовано ${count} активів`)
+    } catch (err) {
+      setImportMsg(err instanceof Error ? err.message : 'Помилка імпорту')
+    } finally {
+      setImporting(false)
     }
   }
 
@@ -103,6 +202,121 @@ export function SettingsScreen() {
             )}
           </div>
         </button>
+
+        {/* ── Синхронізація дефолтних категорій ────────────── */}
+        <button
+          type="button"
+          onClick={handleSyncCategories}
+          disabled={syncingCats}
+          className="flex items-center gap-3 px-4 py-3 rounded-2xl w-full text-left transition-opacity active:opacity-70 disabled:opacity-50"
+          style={{ backgroundColor: 'var(--color-bg-card)' }}
+        >
+          <Tag size={18} style={{ color: 'var(--color-text-secondary)' }} />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
+              {syncingCats ? 'Синхронізуємо...' : 'Оновити категорії за замовчуванням'}
+            </p>
+            {syncCatsMsg ? (
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-accent)' }}>
+                {syncCatsMsg}
+              </p>
+            ) : (
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>
+                Додати нові й перейменувати застарілі категорії
+              </p>
+            )}
+          </div>
+        </button>
+
+        {/* ── DEV: тестові дані (тільки в dev-збірці) ──────── */}
+        {import.meta.env.DEV && (
+          <>
+            <p className="text-xs font-medium px-1 mt-4 mb-1" style={{ color: 'var(--color-text-secondary)' }}>
+              DEV: тестові дані
+            </p>
+
+            <button
+              type="button"
+              onClick={handleSeed}
+              disabled={seeding}
+              className="flex items-center gap-3 px-4 py-3 rounded-2xl w-full text-left transition-opacity active:opacity-70 disabled:opacity-50"
+              style={{ backgroundColor: 'var(--color-bg-card)' }}
+            >
+              <FlaskConical size={18} style={{ color: 'var(--color-text-secondary)' }} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
+                  {seeding ? 'Генеруємо...' : 'Наповнити тестовими транзакціями'}
+                </p>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>
+                  ~90 днів реалістичних витрат і доходів
+                </p>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleClearTransactions}
+              disabled={seeding}
+              className="flex items-center gap-3 px-4 py-3 rounded-2xl w-full text-left transition-opacity active:opacity-70 disabled:opacity-50"
+              style={{ backgroundColor: 'var(--color-bg-card)' }}
+            >
+              <Trash2 size={18} style={{ color: 'var(--color-expense)' }} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium" style={{ color: 'var(--color-expense)' }}>
+                  Видалити всі транзакції
+                </p>
+              </div>
+            </button>
+
+            {seedMsg && (
+              <p className="text-xs px-1" style={{ color: 'var(--color-accent)' }}>
+                {seedMsg}
+              </p>
+            )}
+
+            <button
+              type="button"
+              onClick={handleImportRealTransactions}
+              disabled={importing}
+              className="flex items-center gap-3 px-4 py-3 rounded-2xl w-full text-left transition-opacity active:opacity-70 disabled:opacity-50 mt-1"
+              style={{ backgroundColor: 'var(--color-bg-card)' }}
+            >
+              <UploadCloud size={18} style={{ color: 'var(--color-text-secondary)' }} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
+                  {importing ? 'Імпортуємо...' : 'Імпортувати реальні витрати/доходи'}
+                </p>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>
+                  З Excel-файлу (public/dev-real-transactions.json)
+                </p>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleImportRealInvestments}
+              disabled={importing}
+              className="flex items-center gap-3 px-4 py-3 rounded-2xl w-full text-left transition-opacity active:opacity-70 disabled:opacity-50"
+              style={{ backgroundColor: 'var(--color-bg-card)' }}
+            >
+              <UploadCloud size={18} style={{ color: 'var(--color-text-secondary)' }} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
+                  {importing ? 'Імпортуємо...' : 'Імпортувати реальні інвестиції'}
+                </p>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>
+                  З Excel-файлу (public/dev-real-investments.json)
+                </p>
+              </div>
+            </button>
+
+            {importMsg && (
+              <p className="text-xs px-1" style={{ color: 'var(--color-accent)' }}>
+                {importMsg}
+              </p>
+            )}
+          </>
+        )}
 
         {/* ── Секція: акаунт ──────────────────────────────── */}
         <p className="text-xs font-medium px-1 mt-4 mb-1" style={{ color: 'var(--color-text-secondary)' }}>

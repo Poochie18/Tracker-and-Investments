@@ -27,3 +27,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Особисті фінансові дані для одноразового dev-імпорту — не комітимо
+*.xlsx
+public/dev-real-transactions.json
+public/dev-real-investments.json
