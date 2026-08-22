@@ -32,4 +32,7 @@ export interface InvestmentFormData {
   currency: string
   purchaseDate: Date
   notes?: string
+  // Тільки для type === 'deposit' — калькулятор помісячних нарахувань
+  interestRatePercent?: number
+  termMonths?: number
 }

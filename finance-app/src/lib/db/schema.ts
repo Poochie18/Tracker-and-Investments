@@ -65,9 +65,28 @@ export interface Investment {
   currency: string       // валюта активу, напр. 'UAH', 'USD'
   purchase_date: string  // ISO 8601
   notes: string | null
+  // Поля тільки для type === 'deposit' — калькулятор помісячних нарахувань.
+  // Для решти типів завжди null.
+  interest_rate_percent: number | null // річна процентна ставка, напр. 12.32
+  term_months: number | null           // строк вкладу в місяцях
   created_at: string
   updated_at: string
   deleted_at: string | null  // null = активна, не-null = видалена (soft delete)
+}
+
+// Поповнення депозиту за конкретний місяць — введене користувачем вручну.
+// Нарахування відсотків і залишок на кінець місяця НЕ зберігаються —
+// вони завжди рахуються на льоту з initial amount + rate + список поповнень
+// (deposit-schedule.ts), щоб не було розсинхрону.
+export interface DepositContribution {
+  id: string
+  user_id: string
+  investment_id: string
+  month_index: number // 0 = місяць відкриття вкладу, 1, 2, ... до term_months
+  amount: number       // ЗАВЖДИ у копійках! Сума поповнення за цей місяць.
+  created_at: string
+  updated_at: string
+  deleted_at: string | null
 }
 
 export interface Tag {
@@ -105,6 +124,12 @@ export interface LocalTransaction extends Transaction {
 }
 
 export interface LocalInvestment extends Investment {
+  _sync_status: SyncStatus
+  _sync_error: string | null
+  _local_updated_at: number
+}
+
+export interface LocalDepositContribution extends DepositContribution {
   _sync_status: SyncStatus
   _sync_error: string | null
   _local_updated_at: number

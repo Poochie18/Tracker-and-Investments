@@ -66,6 +66,12 @@ function InvestmentForm({ id, existing, defaultType }: InvestmentFormProps) {
     existing?.purchase_date.slice(0, 10) ?? new Date().toISOString().slice(0, 10)
   )
   const [notes, setNotes] = useState(existing?.notes ?? '')
+  const [interestRate, setInterestRate] = useState(
+    existing?.interest_rate_percent != null ? String(existing.interest_rate_percent) : ''
+  )
+  const [termMonths, setTermMonths] = useState(
+    existing?.term_months != null ? String(existing.term_months) : ''
+  )
   const [error, setError] = useState<string | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
@@ -108,6 +114,8 @@ function InvestmentForm({ id, existing, defaultType }: InvestmentFormProps) {
       currency,
       purchaseDate: new Date(purchaseDate),
       notes: notes.trim() || undefined,
+      interestRatePercent: type === 'deposit' && interestRate ? parseFloat(interestRate.replace(',', '.')) : undefined,
+      termMonths: type === 'deposit' && termMonths ? parseInt(termMonths, 10) : undefined,
     }
 
     try {
@@ -262,6 +270,35 @@ function InvestmentForm({ id, existing, defaultType }: InvestmentFormProps) {
             />
           </Field>
         </div>
+
+        {/* ── Ставка + строк вкладу (тільки для депозитів) ──── */}
+        {type === 'deposit' && (
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Річна ставка, %">
+              <input
+                type="text"
+                inputMode="decimal"
+                placeholder="напр. 12.32"
+                value={interestRate}
+                onChange={(e) => setInterestRate(e.target.value.replace(/[^0-9.,]/g, ''))}
+                className="w-full text-base bg-transparent border-none outline-none"
+                style={{ color: 'var(--color-text-primary)' }}
+              />
+            </Field>
+
+            <Field label="Строк, місяців">
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="напр. 12"
+                value={termMonths}
+                onChange={(e) => setTermMonths(e.target.value.replace(/[^0-9]/g, ''))}
+                className="w-full text-base bg-transparent border-none outline-none"
+                style={{ color: 'var(--color-text-primary)' }}
+              />
+            </Field>
+          </div>
+        )}
 
         {/* ── Дата купівлі ──────────────────────────────────── */}
         <Field label="Дата купівлі">

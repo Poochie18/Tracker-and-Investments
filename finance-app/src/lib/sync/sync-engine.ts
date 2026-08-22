@@ -6,7 +6,9 @@ import { onlineDetector } from './online-detector'
 import { flushSyncQueue, hasPendingRecords } from './sync-queue'
 import { resolveConflict } from './conflict-resolver'
 import { isDevOfflineMode } from '@/lib/auth/dev-bypass'
-import type { LocalTransaction, LocalCategory, LocalAccount, LocalInvestment } from '@/lib/db/schema'
+import type {
+  LocalTransaction, LocalCategory, LocalAccount, LocalInvestment, LocalDepositContribution,
+} from '@/lib/db/schema'
 
 // ============================================================
 // SyncEngine — центральний оркестратор синхронізації.
@@ -160,6 +162,7 @@ export class SyncEngine {
       this.pullCategories(),
       this.pullTransactions(),
       this.pullInvestments(),
+      this.pullDepositContributions(),
     ])
 
     this.invalidateQueries()
@@ -249,6 +252,24 @@ export class SyncEngine {
     }))
 
     await db.investments.bulkPut(localInvestments)
+  }
+
+  private async pullDepositContributions(): Promise<void> {
+    const { data } = await supabase
+      .from('deposit_contributions')
+      .select('*')
+      .eq('user_id', this.userId)
+
+    if (!data) return
+
+    const localContribs: LocalDepositContribution[] = data.map((c) => ({
+      ...c,
+      _sync_status: 'synced' as const,
+      _sync_error: null,
+      _local_updated_at: Date.now(),
+    }))
+
+    await db.depositContributions.bulkPut(localContribs)
   }
 
   // ── Realtime Subscription ─────────────────────────────────
@@ -375,5 +396,6 @@ export class SyncEngine {
     void this.queryClient.invalidateQueries({ queryKey: ['categories'] })
     void this.queryClient.invalidateQueries({ queryKey: ['account'] })
     void this.queryClient.invalidateQueries({ queryKey: ['investments'] })
+    void this.queryClient.invalidateQueries({ queryKey: ['deposit-contributions'] })
   }
 }

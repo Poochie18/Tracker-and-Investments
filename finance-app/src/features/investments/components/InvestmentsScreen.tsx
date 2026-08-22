@@ -3,11 +3,14 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { PlusCircle, TrendingUp } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { useInvestments } from '@/hooks/use-investments'
+import { useExchangeRates } from '@/hooks/use-exchange-rates'
 import { Money, sumMoney } from '@/lib/utils/money'
 import { SyncStatusIndicator } from '@/components/SyncStatusIndicator'
 import { AccountIconButton } from '@/components/AccountIconButton'
 import { PortfolioSummaryCard } from './PortfolioSummaryCard'
 import { InvestmentListItem } from './InvestmentListItem'
+import { DepositListItem } from './DepositListItem'
+import { PortfolioOverview } from './PortfolioOverview'
 import { INVESTMENT_TYPE_META } from '../types'
 import type { InvestmentType } from '@/lib/db/schema'
 
@@ -22,15 +25,29 @@ export function InvestmentsScreen() {
 
   const { user } = useAuth()
   const { data: allInvestments = [], isLoading } = useInvestments(user?.id)
+  const { data: rates } = useExchangeRates()
 
+  // Тут сума рахується без конвертації валют — на вкладці одного типу
+  // активи зазвичай в одній валюті (напр. усі акції в USD). Якщо activeType
+  // немає (сторінка "Огляд"), масив порожній — той екран рендериться окремо.
   const investments = useMemo(
-    () => (activeType ? allInvestments.filter((i) => i.type === activeType) : allInvestments),
+    () => (activeType ? allInvestments.filter((i) => i.type === activeType) : []),
     [allInvestments, activeType]
   )
 
-  // Портфель рахуємо в "умовних копійках" незалежно від валюти активу —
-  // MVP не робить конвертацію валют, тому сума коректна лише якщо
-  // всі активи в одній валюті (типовий кейс для одного користувача).
+  // "Огляд" (без activeType) має окрему логіку — зведена таблиця по типах
+  // + графіки (аналог листа "Сводка" з Excel), а не список усіх активів підряд.
+  if (!activeType) {
+    return (
+      <PortfolioOverview
+        investments={allInvestments}
+        rates={rates}
+        isLoading={isLoading}
+        onAddClick={() => navigate('/investments/add')}
+      />
+    )
+  }
+
   const invested = sumMoney(
     investments.map((i) => Money.fromKopiyky(Math.round(i.purchase_price * i.quantity)))
   )
@@ -40,11 +57,9 @@ export function InvestmentsScreen() {
   const pnl = currentValue.subtract(invested)
   const pnlPercent = invested.isZero() ? 0 : (pnl.toKopiyky() / invested.toKopiyky()) * 100
 
-  const addHref = activeType ? `/investments/add?type=${activeType}` : '/investments/add'
-  const typeMeta = activeType ? INVESTMENT_TYPE_META[activeType] : null
-  const emptyText = typeMeta
-    ? `Ще немає жодного активу типу «${typeMeta.label}».`
-    : 'Ще немає жодного активу. Додай перший — акцію, крипту, депозит чи облігацію.'
+  const addHref = `/investments/add?type=${activeType}`
+  const typeMeta = INVESTMENT_TYPE_META[activeType]
+  const emptyText = `Ще немає жодного активу типу «${typeMeta.label}».`
 
   return (
     <div
@@ -61,7 +76,7 @@ export function InvestmentsScreen() {
       >
         <AccountIconButton />
         <h1 className="text-xl font-semibold flex-1" style={{ color: 'var(--color-text-primary)' }}>
-          {typeMeta ? typeMeta.label : 'Інвестиції'}
+          {typeMeta.label}
         </h1>
         <SyncStatusIndicator />
       </div>
@@ -95,13 +110,17 @@ export function InvestmentsScreen() {
             </div>
           )}
 
-          {investments.map((inv) => (
-            <InvestmentListItem
-              key={inv.id}
-              investment={inv}
-              onPress={() => navigate(`/investments/${inv.id}/edit`)}
-            />
-          ))}
+          {investments.map((inv) =>
+            activeType === 'deposit' ? (
+              <DepositListItem key={inv.id} investment={inv} />
+            ) : (
+              <InvestmentListItem
+                key={inv.id}
+                investment={inv}
+                onPress={() => navigate(`/investments/${inv.id}`)}
+              />
+            )
+          )}
 
           {investments.length > 0 && (
             <button

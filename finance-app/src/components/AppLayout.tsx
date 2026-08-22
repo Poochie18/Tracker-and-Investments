@@ -4,9 +4,17 @@ import { BottomNav } from './BottomNav'
 import { SecondaryNav, type SecondaryNavItem } from './SecondaryNav'
 import { useFilterStore } from '@/stores/filter-store'
 
-// Форми (Додати/Редагувати) — там нема другого рівня навігації,
-// зосереджуємось на самій формі (є власна стрілка "назад" у шапці).
-const FORM_PATH_PATTERNS = [/^\/add$/, /^\/transactions\/.+\/edit$/, /^\/investments\/add$/, /^\/investments\/.+\/edit$/]
+// Екрани-"дриль-даун" (форми Додати/Редагувати, детальна картка активу) —
+// там нема другого рівня навігації, зосереджуємось на самому екрані
+// (є власна стрілка "назад" у шапці).
+const DRILLDOWN_PATH_PATTERNS = [
+  /^\/add$/,
+  /^\/transactions\/.+\/edit$/,
+  /^\/investments\/add$/,
+  /^\/investments\/.+\/edit$/,
+  // Детальна картка активу: /investments/<uuid> (без /type/ і /add)
+  /^\/investments\/(?!type\/|add$)[^/]+$/,
+]
 
 // AppLayout — обгортка для захищених екранів.
 // SyncStatusIndicator і AccountIconButton вбудовані в шапку кожного екрану.
@@ -22,7 +30,7 @@ export function AppLayout() {
 
   const isInvestmentsSection = pathname.startsWith('/investments')
   const isSettingsSection = pathname === '/settings' || pathname.startsWith('/settings/')
-  const isFormScreen = FORM_PATH_PATTERNS.some((re) => re.test(pathname))
+  const isFormScreen = DRILLDOWN_PATH_PATTERNS.some((re) => re.test(pathname))
 
   let secondaryItems: SecondaryNavItem[] | null = null
   if (isInvestmentsSection && !isFormScreen) {

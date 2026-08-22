@@ -1,8 +1,10 @@
 import { db } from '@/lib/db'
 import { supabase } from '@/lib/supabase'
-import type { LocalTransaction, LocalCategory, LocalAccount, LocalInvestment } from '@/lib/db/schema'
-// LocalTransaction / LocalCategory / LocalAccount / LocalInvestment — використовуються у деструктуризації нижче
-void (0 as unknown as LocalTransaction | LocalCategory | LocalAccount | LocalInvestment)
+import type {
+  LocalTransaction, LocalCategory, LocalAccount, LocalInvestment, LocalDepositContribution,
+} from '@/lib/db/schema'
+// Типи використовуються у деструктуризації нижче
+void (0 as unknown as LocalTransaction | LocalCategory | LocalAccount | LocalInvestment | LocalDepositContribution)
 
 // ============================================================
 // Sync Queue — відповідає за push pending записів у Supabase.
@@ -154,41 +156,75 @@ async function pushInvestments(userId: string): Promise<PushResult> {
   return result
 }
 
+// Push поповнень депозитів
+async function pushDepositContributions(userId: string): Promise<PushResult> {
+  const pending = await db.depositContributions
+    .where('user_id').equals(userId)
+    .filter((c) => c._sync_status === 'pending')
+    .toArray()
+
+  if (pending.length === 0) return { successCount: 0, errorCount: 0, errors: [] }
+
+  const result: PushResult = { successCount: 0, errorCount: 0, errors: [] }
+
+  for (const contrib of pending) {
+    const { _sync_status, _sync_error, _local_updated_at, ...supabaseData } = contrib
+
+    const { error } = await supabase
+      .from('deposit_contributions')
+      .upsert(supabaseData, { onConflict: 'id' })
+
+    if (error) {
+      result.errorCount++
+      result.errors.push(`dep-contrib ${contrib.id}: ${error.message}`)
+      await db.depositContributions.update(contrib.id, { _sync_status: 'error', _sync_error: error.message })
+    } else {
+      result.successCount++
+      await db.depositContributions.update(contrib.id, { _sync_status: 'synced', _sync_error: null })
+    }
+  }
+
+  return result
+}
+
 // Чи є взагалі pending записи?
 export async function hasPendingRecords(userId: string): Promise<boolean> {
-  const [txCount, catCount, accCount, invCount] = await Promise.all([
+  const [txCount, catCount, accCount, invCount, depContribCount] = await Promise.all([
     db.transactions.where('user_id').equals(userId).filter((t) => t._sync_status === 'pending').count(),
     db.categories.where('user_id').equals(userId).filter((c) => c._sync_status === 'pending').count(),
     db.accounts.where('user_id').equals(userId).filter((a) => a._sync_status === 'pending').count(),
     db.investments.where('user_id').equals(userId).filter((i) => i._sync_status === 'pending').count(),
+    db.depositContributions.where('user_id').equals(userId).filter((c) => c._sync_status === 'pending').count(),
   ])
-  return txCount + catCount + accCount + invCount > 0
+  return txCount + catCount + accCount + invCount + depContribCount > 0
 }
 
 // Рахуємо кількість помилок (для SyncStatusIndicator)
 export async function countSyncErrors(userId: string): Promise<number> {
-  const [txErr, catErr, accErr, invErr] = await Promise.all([
+  const [txErr, catErr, accErr, invErr, depContribErr] = await Promise.all([
     db.transactions.where('user_id').equals(userId).filter((t) => t._sync_status === 'error').count(),
     db.categories.where('user_id').equals(userId).filter((c) => c._sync_status === 'error').count(),
     db.accounts.where('user_id').equals(userId).filter((a) => a._sync_status === 'error').count(),
     db.investments.where('user_id').equals(userId).filter((i) => i._sync_status === 'error').count(),
+    db.depositContributions.where('user_id').equals(userId).filter((c) => c._sync_status === 'error').count(),
   ])
-  return txErr + catErr + accErr + invErr
+  return txErr + catErr + accErr + invErr + depContribErr
 }
 
 // Головна функція черги: push всіх pending записів
 export async function flushSyncQueue(userId: string): Promise<PushResult> {
-  const [txResult, catResult, accResult, invResult] = await Promise.all([
+  const [txResult, catResult, accResult, invResult, depContribResult] = await Promise.all([
     pushTransactions(userId),
     pushCategories(userId),
     pushAccounts(userId),
     pushInvestments(userId),
+    pushDepositContributions(userId),
   ])
 
   return {
-    successCount: txResult.successCount + catResult.successCount + accResult.successCount + invResult.successCount,
-    errorCount: txResult.errorCount + catResult.errorCount + accResult.errorCount + invResult.errorCount,
-    errors: [...txResult.errors, ...catResult.errors, ...accResult.errors, ...invResult.errors],
+    successCount: txResult.successCount + catResult.successCount + accResult.successCount + invResult.successCount + depContribResult.successCount,
+    errorCount: txResult.errorCount + catResult.errorCount + accResult.errorCount + invResult.errorCount + depContribResult.errorCount,
+    errors: [...txResult.errors, ...catResult.errors, ...accResult.errors, ...invResult.errors, ...depContribResult.errors],
   }
 }
 
