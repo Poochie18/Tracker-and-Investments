@@ -69,6 +69,17 @@ export interface Investment {
   // Для решти типів завжди null.
   interest_rate_percent: number | null // річна процентна ставка, напр. 12.32
   term_months: number | null           // строк вкладу в місяцях
+  // Поля тільки для type === 'bond'. Дати виплат — окремо, у bond_coupon_dates.
+  // ЗАВЖДИ у копійках! Сума купонної виплати ЗА ОДНУ ШТУКУ, як і purchase_price
+  // — при розрахунках множиться на quantity.
+  coupon_amount: number | null
+  // ЗАВЖДИ у копійках! Сума погашення (номінал) ЗА ОДНУ ШТУКУ, як і
+  // purchase_price — може відрізнятись від ціни купівлі (облігація куплена
+  // з премією/дисконтом до номіналу). null → береться ціна купівлі за шт.
+  redemption_amount: number | null
+  // ISO 8601 — дата погашення, вказується явно (не виводиться з дат виплат
+  // купонів у bond_coupon_dates, бо вони можуть не збігатись).
+  redemption_date: string | null
   created_at: string
   updated_at: string
   deleted_at: string | null  // null = активна, не-null = видалена (soft delete)
@@ -84,6 +95,47 @@ export interface DepositContribution {
   investment_id: string
   month_index: number // 0 = місяць відкриття вкладу, 1, 2, ... до term_months
   amount: number       // ЗАВЖДИ у копійках! Сума поповнення за цей місяць.
+  created_at: string
+  updated_at: string
+  deleted_at: string | null
+}
+
+// Дата виплати купона (або погашення) облігації — введена вручну.
+// Найпізніша дата серед записів investment_id — дата погашення (номінал
+// повертається), решта — дати купонних виплат по coupon_amount з Investment.
+export interface BondCouponDate {
+  id: string
+  user_id: string
+  investment_id: string
+  payment_date: string // ISO 8601 (дата, без часу)
+  created_at: string
+  updated_at: string
+  deleted_at: string | null
+}
+
+// Один рядок зліпку портфеля — суми по типу вкладення в гривневому базисі
+// (як у PortfolioSummary), зафіксовані на дату зліпку. pnl/pnlPercent/
+// portfolioPercent НЕ зберігаються — рахуються на льоту з invested/
+// currentValue (buildPortfolioSummaryFromAmounts), як і в живих даних.
+export interface PortfolioSnapshotRow {
+  type: InvestmentType
+  invested: number      // копійки, гривневий базис
+  currentValue: number  // копійки, гривневий базис
+}
+
+// Зліпок портфеля на кінець фінансового року — для порівняння "цей рік
+// проти минулого". Знімається автоматично при переході в новий фінансовий
+// рік (див. use-auto-portfolio-snapshot.ts) або імпортується вручну
+// (dev-real-data-importer.ts, з листів "1 ГОД"/"2 ГОД" Excel-трекера).
+export interface PortfolioSnapshot {
+  id: string
+  user_id: string
+  fiscal_year_key: string    // напр. "2025-06" — унікальний ключ фін. року (getFiscalYear().key)
+  fiscal_year_label: string  // напр. "2025–2026" — для показу користувачу
+  snapshot_date: string      // ISO 8601 — дата, на яку знято зліпок
+  rates_usd: number          // курс USD на момент зліпку (для перемикача валют)
+  rates_eur: number          // курс EUR на момент зліпку
+  rows: PortfolioSnapshotRow[]
   created_at: string
   updated_at: string
   deleted_at: string | null
@@ -130,6 +182,18 @@ export interface LocalInvestment extends Investment {
 }
 
 export interface LocalDepositContribution extends DepositContribution {
+  _sync_status: SyncStatus
+  _sync_error: string | null
+  _local_updated_at: number
+}
+
+export interface LocalBondCouponDate extends BondCouponDate {
+  _sync_status: SyncStatus
+  _sync_error: string | null
+  _local_updated_at: number
+}
+
+export interface LocalPortfolioSnapshot extends PortfolioSnapshot {
   _sync_status: SyncStatus
   _sync_error: string | null
   _local_updated_at: number

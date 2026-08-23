@@ -19,8 +19,16 @@ const CURRENCY_SYMBOLS: Record<string, string> = { UAH: '₴', USD: '$', EUR: '�
 export function DepositScheduleTable({ rows, purchaseDate, currency, onEditMonth }: DepositScheduleTableProps) {
   const symbol = CURRENCY_SYMBOLS[currency] ?? currency
   const fmt = (kopiyky: number) => Money.fromKopiyky(kopiyky).formatCompact(symbol)
+  // Повна назва місяця — для підпису у bottom sheet редагування поповнення.
   const monthLabel = (monthIndex: number) =>
     format(addMonths(new Date(purchaseDate), monthIndex), 'LLLL yyyy', { locale: uk })
+  // Скорочена назва (3 літери) — для вузької колонки "Місяць" у таблиці.
+  // date-fns 'LLL' в uk-локалі дає абревіатуру з крапкою різної довжини,
+  // тож ріжемо повну назву самі — стабільно 3 літери.
+  const monthLabelShort = (monthIndex: number) => {
+    const date = addMonths(new Date(purchaseDate), monthIndex)
+    return `${format(date, 'LLLL', { locale: uk }).slice(0, 3)} ${format(date, 'yy')}`
+  }
 
   return (
     <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: 'rgba(0,0,0,0.15)' }}>
@@ -28,7 +36,7 @@ export function DepositScheduleTable({ rows, purchaseDate, currency, onEditMonth
         <table className="w-full text-xs" style={{ minWidth: 480 }}>
           <thead>
             <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-              <th className="px-2.5 py-2 text-left font-medium whitespace-nowrap" style={{ color: 'var(--color-text-secondary)' }}>
+              <th className="px-1.5 py-2 text-left font-medium whitespace-nowrap w-0" style={{ color: 'var(--color-text-secondary)' }}>
                 Місяць
               </th>
               <th className="px-2.5 py-2 text-right font-medium whitespace-nowrap" style={{ color: 'var(--color-text-secondary)' }}>
@@ -50,8 +58,8 @@ export function DepositScheduleTable({ rows, purchaseDate, currency, onEditMonth
               const label = monthLabel(row.monthIndex)
               return (
                 <tr key={row.monthIndex} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                  <td className="px-2.5 py-2 whitespace-nowrap" style={{ color: 'var(--color-text-primary)' }}>
-                    {row.monthIndex}. {label}
+                  <td className="px-1.5 py-2 whitespace-nowrap" style={{ color: 'var(--color-text-primary)' }}>
+                    {monthLabelShort(row.monthIndex)}
                   </td>
                   <td className="px-2.5 py-2 text-right whitespace-nowrap" style={{ color: 'var(--color-text-secondary)' }}>
                     {fmt(row.startBalance)}

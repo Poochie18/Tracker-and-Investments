@@ -12,6 +12,7 @@ const DRILLDOWN_PATH_PATTERNS = [
   /^\/transactions\/.+\/edit$/,
   /^\/investments\/add$/,
   /^\/investments\/.+\/edit$/,
+  /^\/investments\/.+\/buy-more$/,
   // Детальна картка активу: /investments/<uuid> (без /type/ і /add)
   /^\/investments\/(?!type\/|add$)[^/]+$/,
 ]
@@ -68,7 +69,10 @@ export function AppLayout() {
 
         <div className="fixed bottom-0 left-0 right-0">
           {secondaryItems && <SecondaryNav items={secondaryItems} />}
-          <BottomNav onAddClick={() => navigate('/add')} />
+          <BottomNav
+            onAddClick={() => navigate(isInvestmentsSection ? '/investments/add' : '/add')}
+            addLabel={isInvestmentsSection ? 'Додати актив' : 'Додати транзакцію'}
+          />
         </div>
       </div>
     </div>

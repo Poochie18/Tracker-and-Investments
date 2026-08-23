@@ -32,3 +32,5 @@ dist-ssr
 *.xlsx
 public/dev-real-transactions.json
 public/dev-real-investments.json
+public/dev-real-bond-coupon-dates.json
+public/dev-real-portfolio-snapshots.json

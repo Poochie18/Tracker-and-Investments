@@ -64,6 +64,15 @@ export class Money {
     return `${sign}${formatted} ${currency}`
   }
 
+  // Форматування без копійок взагалі (округлює): "1 235 ₴" — для щільних
+  // зведень (Огляд), де точність до копійки не потрібна і лише займає місце.
+  formatWhole(currency = '₴'): string {
+    const uah = Math.round(Math.abs(this.kopiyky) / 100)
+    const formatted = uah.toLocaleString('uk-UA')
+    const sign = this.kopiyky < 0 ? '−' : ''
+    return `${sign}${formatted} ${currency}`
+  }
+
   // ── Математика ────────────────────────────────────────────
 
   add(other: Money): Money {

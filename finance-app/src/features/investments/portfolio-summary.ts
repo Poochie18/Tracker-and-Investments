@@ -1,6 +1,11 @@
 import { convertToUahMinorUnits, type ExchangeRates } from '@/lib/investments/exchange-rate'
+import { computeDepositTotals } from './deposit-schedule'
+import { computeBondTotals, getCurrentYearBondProfitUah } from './bond-schedule'
+import { getFiscalYearStartMonth } from '@/lib/settings/fiscal-year'
 import { INVESTMENT_TYPE_META } from './types'
-import type { InvestmentType, LocalInvestment } from '@/lib/db/schema'
+import type {
+  InvestmentType, LocalBondCouponDate, LocalDepositContribution, LocalInvestment, PortfolioSnapshotRow,
+} from '@/lib/db/schema'
 
 // ============================================================
 // Агрегація портфеля по типу вкладення — той самий принцип, що
@@ -33,36 +38,17 @@ export interface PortfolioSummary {
   totalPnlPercent: number
 }
 
-export function computePortfolioSummary(
-  investments: LocalInvestment[],
-  rates: ExchangeRates
-): PortfolioSummary {
-  const byType = new Map<InvestmentType, { invested: number; currentValue: number }>()
+// Будує PortfolioSummary з голих сум по типах (invested/currentValue,
+// гривневий базис) — спільна логіка для живих даних (обчислюються нижче)
+// і збережених зліпків історії (portfolio_snapshots): дохід/% рахуються
+// однаково в обох випадках, щоб таблиця/графіки не відрізнялись поведінкою
+// залежно від того, дивимось ми поточний стан чи минулий рік.
+export function buildPortfolioSummaryFromAmounts(amounts: PortfolioSnapshotRow[]): PortfolioSummary {
+  const totalInvested = amounts.reduce((sum, a) => sum + a.invested, 0)
+  const totalCurrentValue = amounts.reduce((sum, a) => sum + a.currentValue, 0)
 
-  for (const inv of investments) {
-    const investedUah = convertToUahMinorUnits(
-      Math.round(inv.purchase_price * inv.quantity),
-      inv.currency,
-      rates
-    )
-    const currentUah = convertToUahMinorUnits(
-      Math.round(inv.current_price * inv.quantity),
-      inv.currency,
-      rates
-    )
-
-    const prev = byType.get(inv.type) ?? { invested: 0, currentValue: 0 }
-    byType.set(inv.type, {
-      invested: prev.invested + investedUah,
-      currentValue: prev.currentValue + currentUah,
-    })
-  }
-
-  const totalInvested = Array.from(byType.values()).reduce((sum, t) => sum + t.invested, 0)
-  const totalCurrentValue = Array.from(byType.values()).reduce((sum, t) => sum + t.currentValue, 0)
-
-  const rows: TypeSummaryRow[] = Array.from(byType.entries())
-    .map(([type, { invested, currentValue }]) => {
+  const rows: TypeSummaryRow[] = amounts
+    .map(({ type, invested, currentValue }) => {
       const pnl = currentValue - invested
       return {
         type,
@@ -81,4 +67,84 @@ export function computePortfolioSummary(
   const totalPnlPercent = totalInvested === 0 ? 0 : (totalPnl / totalInvested) * 100
 
   return { rows, totalInvested, totalCurrentValue, totalPnl, totalPnlPercent }
+}
+
+export function computePortfolioSummary(
+  investments: LocalInvestment[],
+  rates: ExchangeRates,
+  depositContributions: LocalDepositContribution[] = [],
+  bondCouponDates: LocalBondCouponDate[] = [],
+  fiscalYearStartMonth: number = getFiscalYearStartMonth()
+): PortfolioSummary {
+  const byType = new Map<InvestmentType, { invested: number; currentValue: number }>()
+
+  const contributionsByInvestment = new Map<string, LocalDepositContribution[]>()
+  for (const c of depositContributions) {
+    const list = contributionsByInvestment.get(c.investment_id) ?? []
+    list.push(c)
+    contributionsByInvestment.set(c.investment_id, list)
+  }
+
+  const couponDatesByInvestment = new Map<string, LocalBondCouponDate[]>()
+  for (const d of bondCouponDates) {
+    const list = couponDatesByInvestment.get(d.investment_id) ?? []
+    list.push(d)
+    couponDatesByInvestment.set(d.investment_id, list)
+  }
+
+  for (const inv of investments) {
+    // Для депозиту "вкладено" — початковий внесок + усі поповнення за строк,
+    // а "поточна вартість" — сума на кінець останнього місяця строку
+    // (внесок + поповнення + всі нараховані відсотки за податком).
+    // Для облігації "поточна вартість" — вкладено + всі купонні виплати
+    // за весь строк (прибуток облігації = сума купонів, номінал при
+    // погашенні — це повернення вкладеного, не дохід).
+    let investedRaw: number
+    let currentRaw: number
+    if (inv.type === 'deposit') {
+      const totals = computeDepositTotals(inv, contributionsByInvestment.get(inv.id) ?? [])
+      investedRaw = totals.invested
+      currentRaw = totals.currentValue
+    } else if (inv.type === 'bond') {
+      const totals = computeBondTotals(inv, couponDatesByInvestment.get(inv.id) ?? [])
+      investedRaw = totals.invested
+      currentRaw = totals.currentValue
+    } else {
+      investedRaw = Math.round(inv.purchase_price * inv.quantity)
+      currentRaw = Math.round(inv.current_price * inv.quantity)
+    }
+
+    const investedUah = convertToUahMinorUnits(investedRaw, inv.currency, rates)
+    const currentUah = convertToUahMinorUnits(currentRaw, inv.currency, rates)
+
+    const prev = byType.get(inv.type) ?? { invested: 0, currentValue: 0 }
+    byType.set(inv.type, {
+      invested: prev.invested + investedUah,
+      currentValue: prev.currentValue + currentUah,
+    })
+  }
+
+  const amounts: PortfolioSnapshotRow[] = Array.from(byType.entries()).map(([type, v]) => ({ type, ...v }))
+  const summary = buildPortfolioSummaryFromAmounts(amounts)
+
+  // Облігації показують дохід окремо від інших типів: не прибуток за
+  // весь строк володіння (він включає ще не отримані майбутні купони),
+  // а лише за поточний фінансовий рік — щоб "Огляд" відповідав на
+  // питання "скільки я заробив/втратив цього року", а не "скільки
+  // всього заробить ця облігація за весь час до погашення". Актуально
+  // тільки для живих даних — зліпок історії вже "заморожений".
+  const bonds = investments.filter((inv) => inv.type === 'bond')
+  if (bonds.length === 0) return summary
+
+  const currentYearBondProfitUah = getCurrentYearBondProfitUah(bonds, couponDatesByInvestment, fiscalYearStartMonth, rates)
+
+  const rows = summary.rows.map((row) => {
+    if (row.type !== 'bond') return row
+    const pnl = currentYearBondProfitUah
+    return { ...row, pnl, pnlPercent: row.invested === 0 ? 0 : (pnl / row.invested) * 100 }
+  })
+  const totalPnl = rows.reduce((sum, r) => sum + r.pnl, 0)
+  const totalPnlPercent = summary.totalInvested === 0 ? 0 : (totalPnl / summary.totalInvested) * 100
+
+  return { ...summary, rows, totalPnl, totalPnlPercent }
 }

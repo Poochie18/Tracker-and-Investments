@@ -15,7 +15,7 @@ export function PortfolioAllocationChart({ summary, displayCurrency, rates }: Po
   const symbol = displayCurrency === 'UAH' ? '₴' : '$'
   const totalDisplay = Money.fromKopiyky(
     convertFromUahMinorUnits(summary.totalCurrentValue, displayCurrency, rates)
-  ).formatCompact(symbol)
+  ).formatWhole(symbol)
 
   const data = summary.rows.map((r) => ({ name: r.label, value: r.currentValue, color: r.colorHex }))
 

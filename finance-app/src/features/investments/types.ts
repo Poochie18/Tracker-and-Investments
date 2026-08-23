@@ -14,7 +14,7 @@ export interface InvestmentTypeMeta {
 
 export const INVESTMENT_TYPE_META: Record<InvestmentType, InvestmentTypeMeta> = {
   stock: { label: 'Акція', iconName: 'TrendingUp', colorHex: '#4A90E2' },
-  crypto: { label: 'Криптовалюта', iconName: 'Bitcoin', colorHex: '#F4B942' },
+  crypto: { label: 'Крипта', iconName: 'Bitcoin', colorHex: '#F4B942' },
   bond: { label: 'Облігація', iconName: 'FileText', colorHex: '#9CB861' },
   deposit: { label: 'Депозит', iconName: 'Landmark', colorHex: '#00C896' },
   other: { label: 'Інше', iconName: 'MoreHorizontal', colorHex: '#B0B0B0' },
@@ -35,4 +35,8 @@ export interface InvestmentFormData {
   // Тільки для type === 'deposit' — калькулятор помісячних нарахувань
   interestRatePercent?: number
   termMonths?: number
+  // Тільки для type === 'bond'
+  couponAmount?: number      // сума купонної виплати ЗА 1 ШТ, як ціна купівлі (у валюті активу)
+  redemptionAmount?: number  // сума погашення (номінал) ЗА 1 ШТ, як ціна купівлі (у валюті активу)
+  redemptionDate?: Date      // дата погашення
 }

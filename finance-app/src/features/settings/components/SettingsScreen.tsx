@@ -6,9 +6,12 @@ import { useQueryClient } from '@tanstack/react-query'
 import { deduplicateCategories } from '@/lib/auth/first-login-setup'
 import { syncDefaultCategories } from '@/lib/db/category-sync'
 import { clearAllTransactions } from '@/lib/db/dev-data-tools'
-import { importRealTransactions, importRealInvestments } from '@/lib/db/dev-real-data-importer'
+import {
+  importRealTransactions, importRealInvestments, importRealBondCouponDates, importRealPortfolioSnapshots,
+} from '@/lib/db/dev-real-data-importer'
 import { transactionKeys } from '@/hooks/use-transactions'
 import { investmentKeys } from '@/hooks/use-investments'
+import { MONTH_NAMES_UK, useFiscalYearStartMonth, setFiscalYearStartMonth } from '@/lib/settings/fiscal-year'
 
 export function SettingsScreen() {
   const navigate = useNavigate()
@@ -24,6 +27,7 @@ export function SettingsScreen() {
   const [clearTxMsg, setClearTxMsg] = useState<string | null>(null)
   const [importing, setImporting] = useState(false)
   const [importMsg, setImportMsg] = useState<string | null>(null)
+  const fiscalYearStartMonth = useFiscalYearStartMonth()
 
   const handleDedup = async () => {
     if (!user) return
@@ -114,6 +118,40 @@ export function SettingsScreen() {
     }
   }
 
+  const handleImportRealBondCouponDates = async () => {
+    if (!user) return
+    setImporting(true)
+    setImportMsg(null)
+    try {
+      const { updated, notFound } = await importRealBondCouponDates(user.id)
+      void queryClient.invalidateQueries({ queryKey: ['bond-coupon-dates'] })
+      void queryClient.invalidateQueries({ queryKey: investmentKeys.all(user.id) })
+      setImportMsg(
+        `Оновлено дати виплат у ${updated} облігацій` +
+          (notFound.length > 0 ? ` (не знайдено: ${notFound.join(', ')})` : '')
+      )
+    } catch (err) {
+      setImportMsg(err instanceof Error ? err.message : 'Помилка імпорту')
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  const handleImportRealPortfolioSnapshots = async () => {
+    if (!user) return
+    setImporting(true)
+    setImportMsg(null)
+    try {
+      const count = await importRealPortfolioSnapshots(user.id)
+      void queryClient.invalidateQueries({ queryKey: ['portfolio-snapshots'] })
+      setImportMsg(`Імпортовано ${count} зліпків історії портфеля`)
+    } catch (err) {
+      setImportMsg(err instanceof Error ? err.message : 'Помилка імпорту')
+    } finally {
+      setImporting(false)
+    }
+  }
+
   const handleSignOut = async () => {
     setSigningOut(true)
     try {
@@ -143,6 +181,34 @@ export function SettingsScreen() {
       </div>
 
       <div className="flex flex-col gap-2 p-4">
+        {/* ── Секція: інвестиції ───────────────────────────── */}
+        <p className="text-xs font-medium px-1 mb-1" style={{ color: 'var(--color-text-secondary)' }}>
+          Інвестиції
+        </p>
+
+        <div
+          className="flex items-center gap-3 px-4 py-3 rounded-2xl w-full"
+          style={{ backgroundColor: 'var(--color-bg-card)' }}
+        >
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
+              Початок фінансового року
+            </p>
+          </div>
+          <select
+            value={fiscalYearStartMonth}
+            onChange={(e) => setFiscalYearStartMonth(parseInt(e.target.value, 10))}
+            className="text-sm bg-transparent border-none outline-none text-right"
+            style={{ color: 'var(--color-accent)' }}
+          >
+            {MONTH_NAMES_UK.map((name, i) => (
+              <option key={name} value={i + 1} style={{ color: '#000' }}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </div>
+
         {/* ── Секція: дані ────────────────────────────────── */}
         <p className="text-xs font-medium px-1 mb-1" style={{ color: 'var(--color-text-secondary)' }}>
           Дані
@@ -272,6 +338,42 @@ export function SettingsScreen() {
                 </p>
                 <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>
                   З Excel-файлу (public/dev-real-investments.json)
+                </p>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleImportRealBondCouponDates}
+              disabled={importing}
+              className="flex items-center gap-3 px-4 py-3 rounded-2xl w-full text-left transition-opacity active:opacity-70 disabled:opacity-50"
+              style={{ backgroundColor: 'var(--color-bg-card)' }}
+            >
+              <UploadCloud size={18} style={{ color: 'var(--color-text-secondary)' }} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
+                  {importing ? 'Імпортуємо...' : 'Імпортувати дати виплат по облігаціях'}
+                </p>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>
+                  З Excel-файлу (public/dev-real-bond-coupon-dates.json) — спочатку імпортуй інвестиції
+                </p>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleImportRealPortfolioSnapshots}
+              disabled={importing}
+              className="flex items-center gap-3 px-4 py-3 rounded-2xl w-full text-left transition-opacity active:opacity-70 disabled:opacity-50"
+              style={{ backgroundColor: 'var(--color-bg-card)' }}
+            >
+              <UploadCloud size={18} style={{ color: 'var(--color-text-secondary)' }} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
+                  {importing ? 'Імпортуємо...' : 'Імпортувати історію портфеля (1/2 рік)'}
+                </p>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>
+                  З Excel-файлу (public/dev-real-portfolio-snapshots.json) — для тесту вкладки "Огляд"
                 </p>
               </div>
             </button>

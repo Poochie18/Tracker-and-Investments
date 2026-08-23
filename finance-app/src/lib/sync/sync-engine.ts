@@ -8,6 +8,7 @@ import { resolveConflict } from './conflict-resolver'
 import { isDevOfflineMode } from '@/lib/auth/dev-bypass'
 import type {
   LocalTransaction, LocalCategory, LocalAccount, LocalInvestment, LocalDepositContribution,
+  LocalBondCouponDate, LocalPortfolioSnapshot,
 } from '@/lib/db/schema'
 
 // ============================================================
@@ -163,6 +164,8 @@ export class SyncEngine {
       this.pullTransactions(),
       this.pullInvestments(),
       this.pullDepositContributions(),
+      this.pullBondCouponDates(),
+      this.pullPortfolioSnapshots(),
     ])
 
     this.invalidateQueries()
@@ -270,6 +273,42 @@ export class SyncEngine {
     }))
 
     await db.depositContributions.bulkPut(localContribs)
+  }
+
+  private async pullBondCouponDates(): Promise<void> {
+    const { data } = await supabase
+      .from('bond_coupon_dates')
+      .select('*')
+      .eq('user_id', this.userId)
+
+    if (!data) return
+
+    const localDates: LocalBondCouponDate[] = data.map((d) => ({
+      ...d,
+      _sync_status: 'synced' as const,
+      _sync_error: null,
+      _local_updated_at: Date.now(),
+    }))
+
+    await db.bondCouponDates.bulkPut(localDates)
+  }
+
+  private async pullPortfolioSnapshots(): Promise<void> {
+    const { data } = await supabase
+      .from('portfolio_snapshots')
+      .select('*')
+      .eq('user_id', this.userId)
+
+    if (!data) return
+
+    const localSnapshots: LocalPortfolioSnapshot[] = data.map((s) => ({
+      ...s,
+      _sync_status: 'synced' as const,
+      _sync_error: null,
+      _local_updated_at: Date.now(),
+    }))
+
+    await db.portfolioSnapshots.bulkPut(localSnapshots)
   }
 
   // ── Realtime Subscription ─────────────────────────────────
@@ -397,5 +436,7 @@ export class SyncEngine {
     void this.queryClient.invalidateQueries({ queryKey: ['account'] })
     void this.queryClient.invalidateQueries({ queryKey: ['investments'] })
     void this.queryClient.invalidateQueries({ queryKey: ['deposit-contributions'] })
+    void this.queryClient.invalidateQueries({ queryKey: ['bond-coupon-dates'] })
+    void this.queryClient.invalidateQueries({ queryKey: ['portfolio-snapshots'] })
   }
 }

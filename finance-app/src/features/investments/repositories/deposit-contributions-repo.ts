@@ -15,6 +15,17 @@ export const depositContributionsRepo = {
       .sortBy('month_index')
   },
 
+  // Всі поповнення користувача одразу (по всіх депозитах) — потрібно для
+  // підрахунку поточної вартості кожного депозиту в зведеннях (Огляд,
+  // сума по вкладці "Депозити"), де немає одного конкретного investmentId.
+  async getAllForUser(userId: string): Promise<LocalDepositContribution[]> {
+    return db.depositContributions
+      .where('user_id')
+      .equals(userId)
+      .filter((c) => c.deleted_at === null)
+      .sortBy('month_index')
+  },
+
   // Створює або оновлює поповнення за конкретний місяць
   async upsertMonth(
     userId: string,

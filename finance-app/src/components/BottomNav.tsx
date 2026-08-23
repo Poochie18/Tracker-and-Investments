@@ -16,9 +16,10 @@ const NAV_ITEMS = [
 
 interface BottomNavProps {
   onAddClick: () => void
+  addLabel: string
 }
 
-export function BottomNav({ onAddClick }: BottomNavProps) {
+export function BottomNav({ onAddClick, addLabel }: BottomNavProps) {
   const location = useLocation()
   const setCategoryFilter = useFilterStore((s) => s.setCategoryFilter)
 
@@ -50,12 +51,14 @@ export function BottomNav({ onAddClick }: BottomNavProps) {
         />
       ))}
 
-      {/* Кнопка FAB посередині */}
+      {/* Кнопка FAB посередині — колір слідує за акцентом активного розділу
+          (зелений/бірюзовий — транзакції, синій — інвестиції, див. .theme-investments
+          у index.css), плавно перефарбовується при переході між розділами. */}
       <button
         onClick={onAddClick}
-        className="flex items-center justify-center w-14 h-14 rounded-full -mt-6 shadow-lg active:scale-95 transition-transform"
-        style={{ backgroundColor: 'var(--color-fab)' }}
-        aria-label="Додати транзакцію"
+        className="flex items-center justify-center w-14 h-14 rounded-full -mt-6 shadow-lg active:scale-95 transition-all duration-300"
+        style={{ backgroundColor: 'var(--color-accent)' }}
+        aria-label={addLabel}
       >
         <PlusCircle size={28} color="#1B2A2A" />
       </button>

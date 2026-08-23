@@ -69,6 +69,7 @@ export default function App() {
               <Route path="/investments" element={<InvestmentsScreen />} />
               <Route path="/investments/add" element={<AddInvestmentScreen />} />
               <Route path="/investments/:id/edit" element={<AddInvestmentScreen />} />
+              <Route path="/investments/:id/buy-more" element={<AddInvestmentScreen mode="buyMore" />} />
               <Route path="/investments/type/:assetType" element={<InvestmentsScreen />} />
               <Route path="/investments/:id" element={<InvestmentDetailScreen />} />
               <Route path="/settings" element={<SettingsScreen />} />

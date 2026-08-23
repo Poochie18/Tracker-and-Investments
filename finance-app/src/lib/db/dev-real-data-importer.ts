@@ -1,6 +1,8 @@
 import { v4 as uuidv4 } from 'uuid'
 import { db } from '@/lib/db'
 import { investmentsRepo } from '@/features/investments/repositories/investments-repo'
+import { bondCouponDatesRepo } from '@/features/investments/repositories/bond-coupon-dates-repo'
+import { portfolioSnapshotsRepo } from '@/features/investments/repositories/portfolio-snapshots-repo'
 import type { LocalTransaction, InvestmentType } from './schema'
 
 // ============================================================
@@ -29,6 +31,23 @@ interface RawInvestment {
   currency: string
   purchaseDate: string
   notes: string
+}
+
+interface RawBondCouponDates {
+  name: string             // має точно збігатись з name в dev-real-investments.json
+  couponAmount: number     // сума купонної виплати ЗА 1 ШТ (у валюті активу), як ціна купівлі
+  redemptionAmount: number // сума погашення ЗА 1 ШТ (у валюті активу), як ціна купівлі
+  redemptionDate: string    // ISO 8601 (yyyy-mm-dd) — дата погашення
+  dates: string[]           // ISO 8601 (yyyy-mm-dd) — дати виплат купонів
+}
+
+interface RawPortfolioSnapshot {
+  fiscalYearKey: string
+  fiscalYearLabel: string
+  snapshotDate: string // ISO 8601 (yyyy-mm-dd)
+  ratesUsd: number
+  ratesEur: number
+  rows: { type: InvestmentType; invested: number; currentValue: number }[] // у гривнях, не в копійках
 }
 
 async function fetchJson<T>(path: string): Promise<T> {
@@ -106,4 +125,66 @@ export async function importRealInvestments(userId: string): Promise<number> {
   }
 
   return investments.length
+}
+
+// Дати виплат купонів + погашення облігацій — з листа "Облігації" Excel
+// (таблиця "КАЛЕНДАР ВИПЛАТ"). Матчиться по investment.name з уже
+// імпортованими облігаціями (importRealInvestments має відпрацювати першим).
+export async function importRealBondCouponDates(userId: string): Promise<{ updated: number; notFound: string[] }> {
+  const { bonds } = await fetchJson<{ bonds: RawBondCouponDates[] }>('/dev-real-bond-coupon-dates.json')
+
+  const existingBonds = await db.investments
+    .where('user_id')
+    .equals(userId)
+    .filter((i) => i.type === 'bond' && i.deleted_at === null)
+    .toArray()
+  const bondByName = new Map(existingBonds.map((b) => [b.name, b]))
+
+  let updated = 0
+  const notFound: string[] = []
+
+  for (const raw of bonds) {
+    const investment = bondByName.get(raw.name)
+    if (!investment) {
+      notFound.push(raw.name)
+      continue
+    }
+
+    await db.investments.update(investment.id, {
+      coupon_amount: Math.round(raw.couponAmount * 100),
+      redemption_amount: Math.round(raw.redemptionAmount * 100),
+      redemption_date: new Date(raw.redemptionDate).toISOString(),
+      updated_at: new Date().toISOString(),
+      _sync_status: 'pending',
+      _local_updated_at: Date.now(),
+    })
+    await bondCouponDatesRepo.replaceAll(userId, investment.id, raw.dates)
+    updated++
+  }
+
+  return { updated, notFound }
+}
+
+// Історичні зліпки портфеля — з листів "1 ГОД"/"2 ГОД" Excel-трекера
+// (щорічні підсумки на кінець травня — фінансовий рік користувача
+// починається в червні). Для тесту функціоналу історії на "Огляді".
+export async function importRealPortfolioSnapshots(userId: string): Promise<number> {
+  const { snapshots } = await fetchJson<{ snapshots: RawPortfolioSnapshot[] }>('/dev-real-portfolio-snapshots.json')
+
+  for (const snap of snapshots) {
+    await portfolioSnapshotsRepo.save(userId, {
+      fiscalYearKey: snap.fiscalYearKey,
+      fiscalYearLabel: snap.fiscalYearLabel,
+      snapshotDate: new Date(snap.snapshotDate).toISOString(),
+      ratesUsd: snap.ratesUsd,
+      ratesEur: snap.ratesEur,
+      rows: snap.rows.map((r) => ({
+        type: r.type,
+        invested: Math.round(r.invested * 100),
+        currentValue: Math.round(r.currentValue * 100),
+      })),
+    })
+  }
+
+  return snapshots.length
 }

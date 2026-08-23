@@ -26,7 +26,9 @@ function ChartTooltip({ active, payload }: { active?: boolean; payload?: Tooltip
       style={{ backgroundColor: 'var(--color-bg-card)', border: '1px solid rgba(255,255,255,0.1)' }}
     >
       <p className="font-medium mb-1" style={{ color: 'var(--color-text-primary)' }}>{label}</p>
-      <p style={{ color: 'var(--color-text-secondary)' }}>Вартість: {currentValueDisplay.toLocaleString('uk-UA')}</p>
+      <p style={{ color: 'var(--color-text-secondary)' }}>
+        Вартість: {Math.round(currentValueDisplay).toLocaleString('uk-UA')}
+      </p>
       <p style={{ color: pnlPercent >= 0 ? 'var(--color-income)' : 'var(--color-expense)' }}>
         Дохідність: {pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(1)}%
       </p>

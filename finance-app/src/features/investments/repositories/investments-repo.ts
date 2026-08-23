@@ -23,6 +23,9 @@ export const investmentsRepo = {
 
   async create(userId: string, data: InvestmentFormData): Promise<LocalInvestment> {
     const now = new Date().toISOString()
+    // Для облігацій "поточну ціну" не вводимо окремо (тримаємо до погашення
+    // за номіналом) — дзеркалимо ціну купівлі, щоб не ламати підсумки портфеля.
+    const currentPrice = data.type === 'bond' ? data.purchasePrice : data.currentPrice
     const investment: LocalInvestment = {
       id: uuidv4(),
       user_id: userId,
@@ -30,12 +33,15 @@ export const investmentsRepo = {
       type: data.type,
       quantity: data.quantity,
       purchase_price: Math.round(data.purchasePrice * 100),
-      current_price: Math.round(data.currentPrice * 100),
+      current_price: Math.round(currentPrice * 100),
       currency: data.currency,
       purchase_date: data.purchaseDate.toISOString(),
       notes: data.notes?.trim() || null,
       interest_rate_percent: data.type === 'deposit' ? data.interestRatePercent ?? null : null,
       term_months: data.type === 'deposit' ? data.termMonths ?? null : null,
+      coupon_amount: data.type === 'bond' && data.couponAmount != null ? Math.round(data.couponAmount * 100) : null,
+      redemption_amount: data.type === 'bond' && data.redemptionAmount != null ? Math.round(data.redemptionAmount * 100) : null,
+      redemption_date: data.type === 'bond' && data.redemptionDate ? data.redemptionDate.toISOString() : null,
       created_at: now,
       updated_at: now,
       deleted_at: null,
@@ -49,17 +55,21 @@ export const investmentsRepo = {
   },
 
   async update(id: string, data: InvestmentFormData): Promise<void> {
+    const currentPrice = data.type === 'bond' ? data.purchasePrice : data.currentPrice
     await db.investments.update(id, {
       name: data.name,
       type: data.type,
       quantity: data.quantity,
       purchase_price: Math.round(data.purchasePrice * 100),
-      current_price: Math.round(data.currentPrice * 100),
+      current_price: Math.round(currentPrice * 100),
       currency: data.currency,
       purchase_date: data.purchaseDate.toISOString(),
       notes: data.notes?.trim() || null,
       interest_rate_percent: data.type === 'deposit' ? data.interestRatePercent ?? null : null,
       term_months: data.type === 'deposit' ? data.termMonths ?? null : null,
+      coupon_amount: data.type === 'bond' && data.couponAmount != null ? Math.round(data.couponAmount * 100) : null,
+      redemption_amount: data.type === 'bond' && data.redemptionAmount != null ? Math.round(data.redemptionAmount * 100) : null,
+      redemption_date: data.type === 'bond' && data.redemptionDate ? data.redemptionDate.toISOString() : null,
       updated_at: new Date().toISOString(),
       _sync_status: 'pending',
       _local_updated_at: Date.now(),

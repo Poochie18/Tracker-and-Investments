@@ -3,6 +3,7 @@ import { depositContributionsRepo } from '@/features/investments/repositories/de
 
 export const depositContributionKeys = {
   byInvestment: (investmentId: string) => ['deposit-contributions', investmentId] as const,
+  all: (userId: string) => ['deposit-contributions', 'all', userId] as const,
 }
 
 export function useDepositContributions(investmentId: string | undefined) {
@@ -10,6 +11,16 @@ export function useDepositContributions(investmentId: string | undefined) {
     queryKey: depositContributionKeys.byInvestment(investmentId ?? ''),
     queryFn: () => depositContributionsRepo.getByInvestment(investmentId!),
     enabled: !!investmentId,
+  })
+}
+
+// Всі поповнення користувача одразу — для розрахунку поточної вартості
+// кожного депозиту у зведеннях (Огляд, сума по вкладці "Депозити").
+export function useAllDepositContributions(userId: string | undefined) {
+  return useQuery({
+    queryKey: depositContributionKeys.all(userId ?? ''),
+    queryFn: () => depositContributionsRepo.getAllForUser(userId!),
+    enabled: !!userId,
   })
 }
 
@@ -21,6 +32,7 @@ export function useSetDepositContribution(userId: string, investmentId: string) 
       depositContributionsRepo.upsertMonth(userId, investmentId, monthIndex, amount),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: depositContributionKeys.byInvestment(investmentId) })
+      void queryClient.invalidateQueries({ queryKey: depositContributionKeys.all(userId) })
     },
   })
 }

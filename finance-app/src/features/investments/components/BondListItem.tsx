@@ -2,62 +2,52 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { format } from 'date-fns'
 import { uk } from 'date-fns/locale'
-import { ChevronDown, ChevronUp, Pencil, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, Pencil, PlusCircle, Trash2 } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
-import { useDepositContributions, useSetDepositContribution } from '@/hooks/use-deposit-contributions'
+import { useBondCouponDates } from '@/hooks/use-bond-coupon-dates'
 import { useDeleteInvestment } from '@/hooks/use-investments'
+import { useExchangeRates } from '@/hooks/use-exchange-rates'
 import { CategoryIconCircle } from '@/features/transactions/components/CategoryIconCircle'
 import { Money } from '@/lib/utils/money'
 import { formatPercent } from '@/lib/utils/format'
-import { computeDepositSchedule, computeDepositTotals } from '../deposit-schedule'
-import { DepositScheduleTable } from './DepositScheduleTable'
-import { DepositContributionSheet } from './DepositContributionSheet'
+import { convertToUahMinorUnits } from '@/lib/investments/exchange-rate'
+import { computeBondTotals, getBondCouponPaymentAmount } from '../bond-schedule'
+import { BondPaymentSchedule } from './BondPaymentSchedule'
 import { INVESTMENT_TYPE_META } from '../types'
 import type { LocalInvestment } from '@/lib/db/schema'
 
-interface DepositListItemProps {
+interface BondListItemProps {
   investment: LocalInvestment
 }
 
 const CURRENCY_SYMBOLS: Record<string, string> = { UAH: '₴', USD: '$', EUR: '€' }
 
-// Депозит у списку — клік розкриває зведення й помісячний графік прямо
-// на місці (не переходить на окрему сторінку деталей, на відміну від
-// решти типів активів).
-export function DepositListItem({ investment }: DepositListItemProps) {
+// Облігація у списку — так само, як депозит: клік розкриває зведення й
+// графік виплат прямо на місці, без переходу на окрему сторінку деталей.
+export function BondListItem({ investment }: BondListItemProps) {
   const navigate = useNavigate()
   const { user } = useAuth()
   const [expanded, setExpanded] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [editingMonth, setEditingMonth] = useState<{ index: number; label: string } | null>(null)
 
-  const meta = INVESTMENT_TYPE_META.deposit
+  const meta = INVESTMENT_TYPE_META.bond
   const symbol = CURRENCY_SYMBOLS[investment.currency] ?? investment.currency
+  const fmt = (kopiyky: number) => Money.fromKopiyky(kopiyky).formatCompact(symbol)
 
-  const initialAmount = Math.round(investment.purchase_price * investment.quantity)
-
-  // Поповнення завантажуємо завжди (не лише коли розгорнуто) — вони потрібні
-  // для суми в заголовку картки, не тільки для помісячного графіка нижче.
-  const { data: contributions = [] } = useDepositContributions(investment.id)
-  const setContribution = useSetDepositContribution(user?.id ?? '', investment.id)
+  const { data: dates = [] } = useBondCouponDates(investment.id)
+  const { data: rates } = useExchangeRates()
   const deleteInvestment = useDeleteInvestment(user?.id ?? '')
 
-  // Вартість/прибуток рахуються на весь строк наперед (ставка й поповнення
-  // фіксовані договором): поточна вартість — сума на кінець останнього
-  // місяця строку, прибуток — сума всіх нарахувань за весь строк.
-  const totals = computeDepositTotals(investment, contributions)
-  const currentValue = totals.currentValue
-  const pnl = totals.profit
-  const pnlPercent = totals.invested === 0 ? 0 : (pnl / totals.invested) * 100
-  const isProfit = pnl >= 0
-
-  const schedule = computeDepositSchedule(investment, contributions)
-
-  const handleSaveContribution = async (amountUnits: number) => {
-    if (!editingMonth) return
-    await setContribution.mutateAsync({ monthIndex: editingMonth.index, amount: amountUnits })
-    setEditingMonth(null)
-  }
+  const maturityDate = investment.redemption_date
+  // Прибуток облігації — сума всіх купонних виплат за весь строк (номінал
+  // при погашенні — це повернення вкладеного, а не дохід).
+  const totals = computeBondTotals(investment, dates)
+  const totalSpent = totals.invested
+  const isProfit = totals.profit >= 0
+  const profitPercent = totals.invested === 0 ? 0 : (totals.profit / totals.invested) * 100
+  // Сума прибутку завжди в гривнях (навіть якщо облігація в іншій валюті) —
+  // щоб суми в списку були порівнювані між собою незалежно від валюти активу.
+  const profitUah = rates ? convertToUahMinorUnits(totals.profit, investment.currency, rates) : null
 
   const handleDelete = async () => {
     await deleteInvestment.mutateAsync(investment.id)
@@ -78,16 +68,19 @@ export function DepositListItem({ investment }: DepositListItemProps) {
             {investment.name}
           </p>
           <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>
-            {investment.interest_rate_percent != null ? `${investment.interest_rate_percent}% річних` : 'Ставка не вказана'}
+            {investment.quantity} шт × {(investment.purchase_price / 100).toLocaleString('uk-UA')} {symbol}
           </p>
         </div>
 
         <div className="text-right flex-shrink-0">
           <p className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>
-            {Money.fromKopiyky(currentValue).formatCompact(symbol)}
+            {fmt(totalSpent)}
           </p>
           <p className="text-xs mt-0.5" style={{ color: isProfit ? 'var(--color-income)' : 'var(--color-expense)' }}>
-            {isProfit ? '+' : ''}{formatPercent(pnlPercent, 1)}
+            {isProfit ? '+' : ''}{formatPercent(profitPercent, 1)}
+            {profitUah != null && (
+              <> ({isProfit ? '+' : ''}{Money.fromKopiyky(profitUah).formatWhole('₴')})</>
+            )}
           </p>
         </div>
 
@@ -101,36 +94,51 @@ export function DepositListItem({ investment }: DepositListItemProps) {
       {/* ── Розкрита сводка ─────────────────────────────────── */}
       {expanded && (
         <div className="px-4 pb-4 flex flex-col gap-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-          {/* Початкова сума / ставка / строк */}
-          <div className="grid grid-cols-3 gap-2 pt-3">
-            <SummaryStat label="Початкова сума" value={Money.fromKopiyky(initialAmount).formatCompact(symbol)} />
+          {/* Дата купівлі / кількість / ціна за шт / сумарні витрати / погашення / прибуток */}
+          <div className="grid grid-cols-2 gap-3 pt-3">
+            <SummaryStat label="Дата купівлі" value={format(new Date(investment.purchase_date), 'd MMMM yyyy', { locale: uk })} />
+            <SummaryStat label="Сумарні витрати" value={fmt(totalSpent)} />
+            <SummaryStat label="Кількість" value={`${investment.quantity} шт`} />
+            <SummaryStat label="Ціна за шт" value={`${(investment.purchase_price / 100).toLocaleString('uk-UA')} ${symbol}`} />
+            <SummaryStat label="Дата погашення" value={maturityDate ? format(new Date(maturityDate), 'd MMMM yyyy', { locale: uk }) : '—'} />
+            <SummaryStat label="Сума погашення" value={fmt(totals.redemptionAmount)} />
             <SummaryStat
-              label="Ставка"
-              value={investment.interest_rate_percent != null ? `${investment.interest_rate_percent}%` : '—'}
+              label="Прибуток (купони + різниця з номіналом)"
+              value={`${isProfit ? '+' : ''}${fmt(totals.profit)}`}
+              color={isProfit ? 'var(--color-income)' : 'var(--color-expense)'}
             />
-            <SummaryStat label="Строк" value={investment.term_months != null ? `${investment.term_months} міс.` : '—'} />
           </div>
 
-          <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-            Відкрито {format(new Date(investment.purchase_date), 'd MMMM yyyy', { locale: uk })}
-          </p>
-
-          {/* Помісячний графік */}
-          {investment.term_months ? (
-            <DepositScheduleTable
-              rows={schedule}
-              purchaseDate={investment.purchase_date}
+          {/* Графік виплат: купони + погашення */}
+          <div>
+            <p className="text-xs font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+              Виплати
+            </p>
+            <BondPaymentSchedule
+              dates={dates}
+              redemptionDate={investment.redemption_date}
+              couponAmount={getBondCouponPaymentAmount(investment)}
+              redemptionAmount={totals.redemptionAmount}
               currency={investment.currency}
-              onEditMonth={(index, label) => setEditingMonth({ index, label })}
             />
-          ) : (
+          </div>
+
+          {investment.notes && (
             <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-              Вкажи ставку і строк вкладу в редагуванні, щоб побачити графік нарахувань.
+              {investment.notes}
             </p>
           )}
 
           {/* Дії */}
           <div className="flex gap-2 mt-1">
+            <button
+              onClick={() => navigate(`/investments/${investment.id}/buy-more`)}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium"
+              style={{ backgroundColor: 'rgba(255,255,255,0.06)', color: 'var(--color-accent)' }}
+            >
+              <PlusCircle size={13} />
+              Докупити
+            </button>
             <button
               onClick={() => navigate(`/investments/${investment.id}/edit`)}
               className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium"
@@ -151,19 +159,6 @@ export function DepositListItem({ investment }: DepositListItemProps) {
         </div>
       )}
 
-      {/* ── Bottom sheet: поповнення за місяць ─────────────── */}
-      {editingMonth && (
-        <DepositContributionSheet
-          monthIndex={editingMonth.index}
-          monthLabel={editingMonth.label}
-          currentAmount={contributions.find((c) => c.month_index === editingMonth.index)?.amount ?? 0}
-          currency={investment.currency}
-          isSaving={setContribution.isPending}
-          onSave={handleSaveContribution}
-          onClose={() => setEditingMonth(null)}
-        />
-      )}
-
       {/* ── Підтвердження видалення ─────────────────────────── */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-end justify-center">
@@ -177,7 +172,7 @@ export function DepositListItem({ investment }: DepositListItemProps) {
             style={{ backgroundColor: 'var(--color-bg-card)' }}
           >
             <p className="text-base font-semibold text-center" style={{ color: 'var(--color-text-primary)' }}>
-              Видалити депозит?
+              Видалити облігацію?
             </p>
             <button
               onClick={handleDelete}
@@ -200,11 +195,11 @@ export function DepositListItem({ investment }: DepositListItemProps) {
   )
 }
 
-function SummaryStat({ label, value }: { label: string; value: string }) {
+function SummaryStat({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
     <div className="flex flex-col gap-0.5">
       <p className="text-[10px]" style={{ color: 'var(--color-text-secondary)' }}>{label}</p>
-      <p className="text-xs font-semibold" style={{ color: 'var(--color-text-primary)' }}>{value}</p>
+      <p className="text-xs font-semibold" style={{ color: color ?? 'var(--color-text-primary)' }}>{value}</p>
     </div>
   )
 }
