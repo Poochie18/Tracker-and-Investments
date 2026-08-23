@@ -46,7 +46,7 @@ export default function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
+      <BrowserRouter basename={import.meta.env.BASE_URL}>
         <Routes>
           {/* Публічні маршрути — доступні без авторизації */}
           <Route path="/login" element={<LoginScreen />} />
