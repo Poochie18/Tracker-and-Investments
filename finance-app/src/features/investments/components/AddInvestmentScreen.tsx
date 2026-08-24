@@ -12,17 +12,11 @@ import type { InvestmentType, LocalInvestment } from '@/lib/db/schema'
 
 const CURRENCIES = ['UAH', 'USD', 'EUR']
 
-interface AddInvestmentScreenProps {
-  // 'buyMore' — той самий екран, що редагування, але всі поля заблоковані,
-  // крім "Кількість" (додається до наявної) і "Дата купівлі" (цієї покупки).
-  mode?: 'buyMore'
-}
-
 // Обгортка-роутер: чекає завантаження активу (і, для облігацій, дат виплат)
 // при редагуванні (Dexie — асинхронний), а саму форму монтує з key={id ?? 'new'} —
 // тому InvestmentForm ініціалізує свій стан напряму з даних, без setState
 // всередині ефекту.
-export function AddInvestmentScreen({ mode }: AddInvestmentScreenProps = {}) {
+export function AddInvestmentScreen() {
   const { id } = useParams<{ id?: string }>()
   const [searchParams] = useSearchParams()
   const isEdit = !!id
@@ -48,7 +42,6 @@ export function AddInvestmentScreen({ mode }: AddInvestmentScreenProps = {}) {
       existing={existing}
       existingCouponDates={existingDates ?? []}
       defaultType={defaultType}
-      buyMore={mode === 'buyMore'}
     />
   )
 }
@@ -58,10 +51,9 @@ interface InvestmentFormProps {
   existing: LocalInvestment | undefined
   existingCouponDates: { payment_date: string }[]
   defaultType?: InvestmentType
-  buyMore: boolean
 }
 
-function InvestmentForm({ id, existing, existingCouponDates, defaultType, buyMore }: InvestmentFormProps) {
+function InvestmentForm({ id, existing, existingCouponDates, defaultType }: InvestmentFormProps) {
   const navigate = useNavigate()
   const isEdit = !!id
 
@@ -70,12 +62,12 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType, buyMor
   const updateInvestment = useUpdateInvestment(user?.id ?? '')
   const queryClient = useQueryClient()
 
-  // У режимі "докупити" поле "Кількість" — це скільки докуповуємо (не всього),
-  // а "Дата купівлі" — дата цієї покупки; тому обидва стартують порожні/сьогодні,
-  // а не значеннями наявного активу.
   const [name, setName] = useState(existing?.name ?? '')
   const [type, setType] = useState<InvestmentType>(existing?.type ?? defaultType ?? 'stock')
-  const [quantity, setQuantity] = useState(!buyMore && existing ? String(existing.quantity) : '')
+  // Для облігацій, що редагуються, "Кількість"/"Ціна купівлі"/"Дата купівлі"
+  // — похідні значення від партій (bond_lots, керуються через BondListItem/
+  // BondLotSheet), тому тут заблоковані (bondFieldsLocked нижче).
+  const [quantity, setQuantity] = useState(existing ? String(existing.quantity) : '')
   const [purchasePrice, setPurchasePrice] = useState(
     existing ? String(existing.purchase_price / 100) : ''
   )
@@ -84,7 +76,7 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType, buyMor
   )
   const [currency, setCurrency] = useState(existing?.currency ?? 'UAH')
   const [purchaseDate, setPurchaseDate] = useState(
-    buyMore ? new Date().toISOString().slice(0, 10) : existing?.purchase_date.slice(0, 10) ?? new Date().toISOString().slice(0, 10)
+    existing?.purchase_date.slice(0, 10) ?? new Date().toISOString().slice(0, 10)
   )
   const [notes, setNotes] = useState(existing?.notes ?? '')
   const [interestRate, setInterestRate] = useState(
@@ -108,6 +100,11 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType, buyMor
   const [error, setError] = useState<string | null>(null)
 
   const isSaving = createInvestment.isPending || updateInvestment.isPending
+  const isBond = type === 'bond'
+  // Облігація, що вже редагується, — "Кількість"/"Ціна купівлі"/"Дата
+  // купівлі" похідні від партій (bond_lots), керуються окремо через
+  // BondListItem → "Докупити"/тап на партію, тут заблоковані.
+  const bondFieldsLocked = isBond && isEdit
 
   const addCouponDate = () => setCouponDates_((prev) => [...prev, new Date().toISOString().slice(0, 10)])
   const updateCouponDate = (index: number, value: string) =>
@@ -121,14 +118,13 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType, buyMor
     const quantityNum = parseFloat(quantity.replace(',', '.'))
     const purchasePriceNum = parseFloat(purchasePrice.replace(',', '.'))
     const currentPriceNum = parseFloat(currentPrice.replace(',', '.'))
-    const isBond = type === 'bond'
 
     if (!name.trim()) {
       setError('Введіть назву активу')
       return
     }
     if (!quantity || isNaN(quantityNum) || quantityNum <= 0) {
-      setError(buyMore ? 'Введіть кількість, що докуповуєте' : 'Введіть кількість більше 0')
+      setError('Введіть кількість більше 0')
       return
     }
     if (!purchasePrice || isNaN(purchasePriceNum) || purchasePriceNum < 0) {
@@ -145,16 +141,10 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType, buyMor
       return
     }
 
-    // "Докупити" додає введену кількість до наявної — решта полів (ціна,
-    // купон, номінал, дата погашення...) заблокована і йде без змін. Нові
-    // суми купонів/погашення порахуються самі: bond-schedule.ts множить
-    // ціну купону й погашення (за 1 шт) на investment.quantity.
-    const totalQuantity = buyMore && existing ? existing.quantity + quantityNum : quantityNum
-
     const formData = {
       name: name.trim(),
       type,
-      quantity: totalQuantity,
+      quantity: quantityNum,
       purchasePrice: purchasePriceNum,
       currentPrice: isBond ? purchasePriceNum : currentPriceNum,
       currency,
@@ -178,8 +168,7 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType, buyMor
 
       // Дати виплат зберігаємо окремо — тільки для облігацій, і тільки
       // якщо список змінювався (для нового активу зберігаємо завжди, якщо є дати).
-      // При "докупити" список дат не редагується — не чіпаємо його.
-      if (isBond && investmentId && !buyMore) {
+      if (isBond && investmentId) {
         await bondCouponDatesRepo.replaceAll(user.id, investmentId, couponDates.filter(Boolean))
         void queryClient.invalidateQueries({ queryKey: bondCouponDateKeys.byInvestment(investmentId) })
         void queryClient.invalidateQueries({ queryKey: bondCouponDateKeys.all(user.id) })
@@ -210,13 +199,13 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType, buyMor
           <ArrowLeft size={22} color="var(--color-text-primary)" />
         </button>
         <h1 className="text-lg font-semibold flex-1" style={{ color: 'var(--color-text-primary)' }}>
-          {buyMore ? 'Докупити' : isEdit ? 'Редагувати актив' : 'Новий актив'}
+          {isEdit ? 'Редагувати актив' : 'Новий актив'}
         </h1>
       </div>
 
       <div className="flex flex-col gap-5 py-5 px-4 overflow-y-auto flex-1">
-        {/* ── Тип активу (не показуємо при "докупити" — тип не міняється) ── */}
-        {!buyMore && <div>
+        {/* ── Тип активу ────────────────────────────────────── */}
+        <div>
           <p className="text-xs font-medium mb-3" style={{ color: 'var(--color-text-secondary)' }}>
             Тип активу
           </p>
@@ -250,16 +239,15 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType, buyMor
               )
             })}
           </div>
-        </div>}
+        </div>
 
         {/* ── Назва ─────────────────────────────────────────── */}
-        <Field label="Назва" disabled={buyMore}>
+        <Field label="Назва">
           <input
             type="text"
             placeholder="напр. Apple Inc., Bitcoin, ОВДП"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            disabled={buyMore}
             className="w-full text-base bg-transparent border-none outline-none"
             style={{ color: 'var(--color-text-primary)' }}
           />
@@ -267,23 +255,23 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType, buyMor
 
         {/* ── Кількість + Валюта ────────────────────────────── */}
         <div className="grid grid-cols-2 gap-4">
-          <Field label={buyMore ? 'Кількість, що докуповуєте' : 'Кількість'}>
+          <Field label="Кількість" disabled={bondFieldsLocked}>
             <input
               type="text"
               inputMode="decimal"
               placeholder="0"
               value={quantity}
               onChange={(e) => setQuantity(e.target.value.replace(/[^0-9.,]/g, ''))}
+              disabled={bondFieldsLocked}
               className="w-full text-base bg-transparent border-none outline-none"
               style={{ color: 'var(--color-text-primary)' }}
             />
           </Field>
 
-          <Field label="Валюта" disabled={buyMore}>
+          <Field label="Валюта">
             <select
               value={currency}
               onChange={(e) => setCurrency(e.target.value)}
-              disabled={buyMore}
               className="w-full text-base bg-transparent border-none outline-none"
               style={{ color: 'var(--color-text-primary)' }}
             >
@@ -299,41 +287,39 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType, buyMor
         {/* ── Ціна купівлі + поточна ціна (для облігацій поточна ціна не потрібна —
              тримаємо до погашення за номіналом) ────────────── */}
         <div className="grid grid-cols-2 gap-4">
-          <Field label={`Ціна купівлі (${currency})`} disabled={buyMore}>
+          <Field label={`Ціна купівлі (${currency})`} disabled={bondFieldsLocked}>
             <input
               type="text"
               inputMode="decimal"
               placeholder="0"
               value={purchasePrice}
               onChange={(e) => setPurchasePrice(e.target.value.replace(/[^0-9.,]/g, ''))}
-              disabled={buyMore}
+              disabled={bondFieldsLocked}
               className="w-full text-base bg-transparent border-none outline-none"
               style={{ color: 'var(--color-text-primary)' }}
             />
           </Field>
 
           {type === 'bond' ? (
-            <Field label={`Сума погашення за 1 шт (${currency})`} disabled={buyMore}>
+            <Field label={`Сума погашення за 1 шт (${currency})`}>
               <input
                 type="text"
                 inputMode="decimal"
                 placeholder="напр. 1000"
                 value={redemptionAmount}
                 onChange={(e) => setRedemptionAmount(e.target.value.replace(/[^0-9.,]/g, ''))}
-                disabled={buyMore}
                 className="w-full text-base bg-transparent border-none outline-none"
                 style={{ color: 'var(--color-text-primary)' }}
               />
             </Field>
           ) : (
-            <Field label={`Поточна ціна (${currency})`} disabled={buyMore}>
+            <Field label={`Поточна ціна (${currency})`}>
               <input
                 type="text"
                 inputMode="decimal"
                 placeholder="0"
                 value={currentPrice}
                 onChange={(e) => setCurrentPrice(e.target.value.replace(/[^0-9.,]/g, ''))}
-                disabled={buyMore}
                 className="w-full text-base bg-transparent border-none outline-none"
                 style={{ color: 'var(--color-text-primary)' }}
               />
@@ -344,27 +330,25 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType, buyMor
         {/* ── Ставка + строк вкладу (тільки для депозитів) ──── */}
         {type === 'deposit' && (
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Річна ставка, %" disabled={buyMore}>
+            <Field label="Річна ставка, %">
               <input
                 type="text"
                 inputMode="decimal"
                 placeholder="напр. 12.32"
                 value={interestRate}
                 onChange={(e) => setInterestRate(e.target.value.replace(/[^0-9.,]/g, ''))}
-                disabled={buyMore}
                 className="w-full text-base bg-transparent border-none outline-none"
                 style={{ color: 'var(--color-text-primary)' }}
               />
             </Field>
 
-            <Field label="Строк, місяців" disabled={buyMore}>
+            <Field label="Строк, місяців">
               <input
                 type="text"
                 inputMode="numeric"
                 placeholder="напр. 12"
                 value={termMonths}
                 onChange={(e) => setTermMonths(e.target.value.replace(/[^0-9]/g, ''))}
-                disabled={buyMore}
                 className="w-full text-base bg-transparent border-none outline-none"
                 style={{ color: 'var(--color-text-primary)' }}
               />
@@ -374,23 +358,23 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType, buyMor
 
         {/* ── Дата купівлі + дата погашення (для облігацій) ──── */}
         <div className={type === 'bond' ? 'grid grid-cols-2 gap-4' : ''}>
-          <Field label={buyMore ? 'Дата купівлі (цієї покупки)' : 'Дата купівлі'}>
+          <Field label="Дата купівлі" disabled={bondFieldsLocked}>
             <input
               type="date"
               value={purchaseDate}
               onChange={(e) => setPurchaseDate(e.target.value)}
+              disabled={bondFieldsLocked}
               className="w-full text-base bg-transparent border-none outline-none"
               style={{ color: 'var(--color-text-primary)', colorScheme: 'dark' }}
             />
           </Field>
 
           {type === 'bond' && (
-            <Field label="Дата погашення" disabled={buyMore}>
+            <Field label="Дата погашення">
               <input
                 type="date"
                 value={redemptionDate}
                 onChange={(e) => setRedemptionDate(e.target.value)}
-                disabled={buyMore}
                 className="w-full text-base bg-transparent border-none outline-none"
                 style={{ color: 'var(--color-text-primary)', colorScheme: 'dark' }}
               />
@@ -400,14 +384,13 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType, buyMor
 
         {/* ── Ціна купону за 1 шт (тільки для облігацій) ──────── */}
         {type === 'bond' && (
-          <Field label={`Ціна купону за 1 шт (${currency})`} disabled={buyMore}>
+          <Field label={`Ціна купону за 1 шт (${currency})`}>
             <input
               type="text"
               inputMode="decimal"
               placeholder="напр. 81.75"
               value={couponAmount}
               onChange={(e) => setCouponAmount(e.target.value.replace(/[^0-9.,]/g, ''))}
-              disabled={buyMore}
               className="w-full text-base bg-transparent border-none outline-none"
               style={{ color: 'var(--color-text-primary)' }}
             />
@@ -415,21 +398,19 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType, buyMor
         )}
 
         {/* ── Нотатки ───────────────────────────────────────── */}
-        <Field label="Нотатки (необов'язково)" disabled={buyMore}>
+        <Field label="Нотатки (необов'язково)">
           <input
             type="text"
             placeholder="напр. брокер, номер рахунку..."
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            disabled={buyMore}
             className="w-full text-sm bg-transparent border-none outline-none"
             style={{ color: 'var(--color-text-primary)' }}
           />
         </Field>
 
-        {/* ── Дати виплат купонів (тільки для облігацій, і не в режимі
-             "докупити" — список дат тут не редагується) ───────────── */}
-        {type === 'bond' && !buyMore && (
+        {/* ── Дати виплат купонів (тільки для облігацій) ──────── */}
+        {type === 'bond' && (
           <div>
             <p className="text-xs font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
               Дати виплат купонів
@@ -482,7 +463,7 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType, buyMor
             style={{ backgroundColor: 'var(--color-accent)', color: '#1B2A2A' }}
           >
             <Check size={20} />
-            {isSaving ? 'Зберігаємо...' : buyMore ? 'Докупити' : 'Зберегти'}
+            {isSaving ? 'Зберігаємо...' : 'Зберегти'}
           </button>
         </div>
       </div>

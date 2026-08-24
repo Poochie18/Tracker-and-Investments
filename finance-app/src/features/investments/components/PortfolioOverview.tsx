@@ -6,6 +6,7 @@ import { AccountIconButton } from '@/components/AccountIconButton'
 import { useAuth } from '@/hooks/use-auth'
 import { useAllDepositContributions } from '@/hooks/use-deposit-contributions'
 import { useAllBondCouponDates } from '@/hooks/use-bond-coupon-dates'
+import { useAllBondLots } from '@/hooks/use-bond-lots'
 import { usePortfolioSnapshots } from '@/hooks/use-portfolio-snapshots'
 import { useFiscalYearStartMonth } from '@/lib/settings/fiscal-year'
 import { computePortfolioSummary, buildPortfolioSummaryFromAmounts, type PortfolioSummary } from '../portfolio-summary'
@@ -44,15 +45,16 @@ export function PortfolioOverview({ investments, rates, isLoading }: PortfolioOv
   const { user } = useAuth()
   const { data: depositContributions = [] } = useAllDepositContributions(user?.id)
   const { data: bondCouponDates = [] } = useAllBondCouponDates(user?.id)
+  const { data: bondLots = [] } = useAllBondLots(user?.id)
   const { data: snapshots = [] } = usePortfolioSnapshots(user?.id)
   const fiscalYearStartMonth = useFiscalYearStartMonth()
 
   const liveSummary = useMemo(
     () =>
       rates
-        ? computePortfolioSummary(investments, rates, depositContributions, bondCouponDates, fiscalYearStartMonth)
+        ? computePortfolioSummary(investments, rates, depositContributions, bondCouponDates, bondLots, fiscalYearStartMonth)
         : null,
-    [investments, rates, depositContributions, bondCouponDates, fiscalYearStartMonth]
+    [investments, rates, depositContributions, bondCouponDates, bondLots, fiscalYearStartMonth]
   )
 
   // Найкращий момент зафіксувати зліпок минулого року — коли є свіжі живі

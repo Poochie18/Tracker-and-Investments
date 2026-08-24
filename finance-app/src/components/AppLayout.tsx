@@ -12,7 +12,6 @@ const DRILLDOWN_PATH_PATTERNS = [
   /^\/transactions\/.+\/edit$/,
   /^\/investments\/add$/,
   /^\/investments\/.+\/edit$/,
-  /^\/investments\/.+\/buy-more$/,
   // Детальна картка активу: /investments/<uuid> (без /type/ і /add)
   /^\/investments\/(?!type\/|add$)[^/]+$/,
 ]

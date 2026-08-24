@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { db } from '@/lib/db'
 import type { LocalInvestment } from '@/lib/db/schema'
 import type { InvestmentFormData } from '../types'
+import { bondLotsRepo } from './bond-lots-repo'
 
 // Репозиторій для роботи з інвестиціями через Dexie (IndexedDB).
 // Той самий патерн, що і transactions-repo / categories-repo:
@@ -51,6 +52,18 @@ export const investmentsRepo = {
     }
 
     await db.investments.add(investment)
+
+    // Перша партія (лот) облігації — сама покупка, введена в цій формі.
+    // Наступні докупівлі додають свої лоти через bond-lots-repo.ts, а
+    // investment.quantity лишається похідним (сумою активних лотів).
+    if (data.type === 'bond') {
+      await bondLotsRepo.add(userId, investment.id, {
+        date: investment.purchase_date,
+        quantity: investment.quantity,
+        price: investment.purchase_price,
+      })
+    }
+
     return investment
   },
 

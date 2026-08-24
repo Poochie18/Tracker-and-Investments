@@ -113,6 +113,25 @@ export interface BondCouponDate {
   deleted_at: string | null
 }
 
+// Партія (лот) купівлі облігації — кожна покупка (первинна чи докупівля)
+// зберігається окремим записом зі своєю датою, кількістю і ціною за штуку.
+// investment.quantity — похідне значення, сума кількостей активних лотів
+// (bond-lots-repo.ts підтримує його в синхронному стані після кожної зміни
+// лота). Купонна виплата на конкретну дату рахується по кількості, що
+// фактично була "на руках" на цю дату (bond-schedule.ts: getOutstandingQuantity),
+// а не по поточній сумарній кількості — щоб докупівля не задвоювала минулі виплати.
+export interface BondLot {
+  id: string
+  user_id: string
+  investment_id: string
+  purchase_date: string  // ISO 8601 (дата, без часу)
+  quantity: number       // може бути дробовою, як і Investment.quantity
+  purchase_price: number // ЗАВЖДИ у копійках! Ціна за одну штуку саме цієї партії.
+  created_at: string
+  updated_at: string
+  deleted_at: string | null
+}
+
 // Один рядок зліпку портфеля — суми по типу вкладення в гривневому базисі
 // (як у PortfolioSummary), зафіксовані на дату зліпку. pnl/pnlPercent/
 // portfolioPercent НЕ зберігаються — рахуються на льоту з invested/
@@ -188,6 +207,12 @@ export interface LocalDepositContribution extends DepositContribution {
 }
 
 export interface LocalBondCouponDate extends BondCouponDate {
+  _sync_status: SyncStatus
+  _sync_error: string | null
+  _local_updated_at: number
+}
+
+export interface LocalBondLot extends BondLot {
   _sync_status: SyncStatus
   _sync_error: string | null
   _local_updated_at: number
