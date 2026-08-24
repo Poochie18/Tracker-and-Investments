@@ -3,13 +3,14 @@ import { uk } from 'date-fns/locale'
 import { CheckCircle2, Circle } from 'lucide-react'
 import { Money } from '@/lib/utils/money'
 import { getBondPaymentSchedule } from '../bond-schedule'
-import type { LocalBondCouponDate } from '@/lib/db/schema'
+import type { LocalBondCouponDate, LocalBondLot } from '@/lib/db/schema'
 
 interface BondPaymentScheduleProps {
   dates: LocalBondCouponDate[]
   redemptionDate: string | null // ISO 8601 — дата погашення (окреме поле, не з dates)
-  couponAmount: number | null    // копійки
-  redemptionAmount: number       // копійки — номінал, що повертається при погашенні (вже × кількість)
+  lots: LocalBondLot[]           // партії купівлі — визначають кількість "на руках" на кожну дату
+  couponAmountPerUnit: number | null // копійки, за 1 шт
+  redemptionAmountPerUnit: number    // копійки, за 1 шт — номінал, що повертається при погашенні
   currency: string
 }
 
@@ -17,11 +18,13 @@ const CURRENCY_SYMBOLS: Record<string, string> = { UAH: '₴', USD: '$', EUR: '�
 
 // Графік виплат облігації: дати купонів + окрема дата погашення (якщо
 // збігаються — один рядок з обома позначками). Минулі дати показуються
-// неактивними (виплата вже відбулась), майбутні — активними.
-export function BondPaymentSchedule({ dates, redemptionDate, couponAmount, redemptionAmount, currency }: BondPaymentScheduleProps) {
+// неактивними (виплата вже відбулась), майбутні — активними. Сума купона
+// на кожну дату рахується по кількості лотів, куплених ДО цієї дати —
+// докупівля не змінює суму вже минулих виплат.
+export function BondPaymentSchedule({ dates, redemptionDate, lots, couponAmountPerUnit, redemptionAmountPerUnit, currency }: BondPaymentScheduleProps) {
   const symbol = CURRENCY_SYMBOLS[currency] ?? currency
   const fmt = (kopiyky: number) => Money.fromKopiyky(kopiyky).formatCompact(symbol)
-  const rows = getBondPaymentSchedule(dates, redemptionDate)
+  const rows = getBondPaymentSchedule(dates, redemptionDate, lots, couponAmountPerUnit, redemptionAmountPerUnit)
 
   if (rows.length === 0) {
     return (
@@ -34,7 +37,7 @@ export function BondPaymentSchedule({ dates, redemptionDate, couponAmount, redem
   return (
     <div className="flex flex-col gap-1">
       {rows.map((row) => {
-        const amount = (row.isCoupon ? couponAmount ?? 0 : 0) + (row.isRedemption ? redemptionAmount : 0)
+        const amount = row.amount
         const label = row.isCoupon && row.isRedemption ? 'Купон + Погашення' : row.isRedemption ? 'Погашення' : 'Купон'
         return (
           <div

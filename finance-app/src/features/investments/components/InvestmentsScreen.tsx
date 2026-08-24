@@ -6,6 +6,7 @@ import { useInvestments } from '@/hooks/use-investments'
 import { useExchangeRates } from '@/hooks/use-exchange-rates'
 import { useAllDepositContributions } from '@/hooks/use-deposit-contributions'
 import { useAllBondCouponDates } from '@/hooks/use-bond-coupon-dates'
+import { useAllBondLots } from '@/hooks/use-bond-lots'
 import { Money, sumMoney } from '@/lib/utils/money'
 import { SyncStatusIndicator } from '@/components/SyncStatusIndicator'
 import { AccountIconButton } from '@/components/AccountIconButton'
@@ -35,6 +36,7 @@ export function InvestmentsScreen() {
   const { data: rates } = useExchangeRates()
   const { data: depositContributions = [] } = useAllDepositContributions(user?.id)
   const { data: bondCouponDates = [] } = useAllBondCouponDates(user?.id)
+  const { data: bondLots = [] } = useAllBondLots(user?.id)
   const fiscalYearStartMonth = useFiscalYearStartMonth()
 
   // Тут сума рахується без конвертації валют — на вкладці одного типу
@@ -75,7 +77,11 @@ export function InvestmentsScreen() {
       .filter((i) => i.type === 'bond')
       .map((i) => [
         i.id,
-        computeBondTotals(i, bondCouponDates.filter((d) => d.investment_id === i.id)),
+        computeBondTotals(
+          i,
+          bondCouponDates.filter((d) => d.investment_id === i.id),
+          bondLots.filter((l) => l.investment_id === i.id)
+        ),
       ])
   )
 
@@ -133,6 +139,7 @@ export function InvestmentsScreen() {
               <BondFiscalYearTable
                 bonds={investments}
                 bondCouponDates={bondCouponDates}
+                bondLots={bondLots}
                 rates={rates}
                 fiscalYearStartMonth={fiscalYearStartMonth}
               />

@@ -1,7 +1,7 @@
 import Dexie, { type EntityTable } from 'dexie'
 import type {
   LocalAccount, LocalCategory, LocalTransaction, LocalTag, LocalInvestment, LocalDepositContribution,
-  LocalBondCouponDate, LocalPortfolioSnapshot,
+  LocalBondCouponDate, LocalBondLot, LocalPortfolioSnapshot,
 } from './schema'
 
 // ============================================================
@@ -18,6 +18,7 @@ export class FinanceDB extends Dexie {
   investments!: EntityTable<LocalInvestment, 'id'>
   depositContributions!: EntityTable<LocalDepositContribution, 'id'>
   bondCouponDates!: EntityTable<LocalBondCouponDate, 'id'>
+  bondLots!: EntityTable<LocalBondLot, 'id'>
   portfolioSnapshots!: EntityTable<LocalPortfolioSnapshot, 'id'>
 
   constructor() {
@@ -84,6 +85,20 @@ export class FinanceDB extends Dexie {
       depositContributions: '&id, user_id, investment_id, [investment_id+month_index], _sync_status',
       bondCouponDates: '&id, user_id, investment_id, _sync_status',
       portfolioSnapshots: '&id, user_id, [user_id+fiscal_year_key], _sync_status',
+    })
+
+    // v7: додаємо bond_lots (партії купівлі облігацій — дата+кількість+ціна
+    // кожної окремої покупки, замість єдиної сумарної quantity на Investment)
+    this.version(7).stores({
+      accounts: '&id, user_id, _sync_status',
+      categories: '&id, user_id, type, [user_id+type], sort_order, _sync_status',
+      transactions: '&id, user_id, account_id, category_id, date, deleted_at, _sync_status',
+      tags: '&id, user_id, name',
+      investments: '&id, user_id, type, deleted_at, _sync_status',
+      depositContributions: '&id, user_id, investment_id, [investment_id+month_index], _sync_status',
+      bondCouponDates: '&id, user_id, investment_id, _sync_status',
+      portfolioSnapshots: '&id, user_id, [user_id+fiscal_year_key], _sync_status',
+      bondLots: '&id, user_id, investment_id, _sync_status',
     })
   }
 }

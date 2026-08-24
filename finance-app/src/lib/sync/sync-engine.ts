@@ -8,7 +8,7 @@ import { resolveConflict } from './conflict-resolver'
 import { isDevOfflineMode } from '@/lib/auth/dev-bypass'
 import type {
   LocalTransaction, LocalCategory, LocalAccount, LocalInvestment, LocalDepositContribution,
-  LocalBondCouponDate, LocalPortfolioSnapshot,
+  LocalBondCouponDate, LocalBondLot, LocalPortfolioSnapshot,
 } from '@/lib/db/schema'
 
 // ============================================================
@@ -165,6 +165,7 @@ export class SyncEngine {
       this.pullInvestments(),
       this.pullDepositContributions(),
       this.pullBondCouponDates(),
+      this.pullBondLots(),
       this.pullPortfolioSnapshots(),
     ])
 
@@ -291,6 +292,24 @@ export class SyncEngine {
     }))
 
     await db.bondCouponDates.bulkPut(localDates)
+  }
+
+  private async pullBondLots(): Promise<void> {
+    const { data } = await supabase
+      .from('bond_lots')
+      .select('*')
+      .eq('user_id', this.userId)
+
+    if (!data) return
+
+    const localLots: LocalBondLot[] = data.map((l) => ({
+      ...l,
+      _sync_status: 'synced' as const,
+      _sync_error: null,
+      _local_updated_at: Date.now(),
+    }))
+
+    await db.bondLots.bulkPut(localLots)
   }
 
   private async pullPortfolioSnapshots(): Promise<void> {
@@ -437,6 +456,7 @@ export class SyncEngine {
     void this.queryClient.invalidateQueries({ queryKey: ['investments'] })
     void this.queryClient.invalidateQueries({ queryKey: ['deposit-contributions'] })
     void this.queryClient.invalidateQueries({ queryKey: ['bond-coupon-dates'] })
+    void this.queryClient.invalidateQueries({ queryKey: ['bond-lots'] })
     void this.queryClient.invalidateQueries({ queryKey: ['portfolio-snapshots'] })
   }
 }

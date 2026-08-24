@@ -4,7 +4,7 @@ import { computeBondTotals, getCurrentYearBondProfitUah } from './bond-schedule'
 import { getFiscalYearStartMonth } from '@/lib/settings/fiscal-year'
 import { INVESTMENT_TYPE_META } from './types'
 import type {
-  InvestmentType, LocalBondCouponDate, LocalDepositContribution, LocalInvestment, PortfolioSnapshotRow,
+  InvestmentType, LocalBondCouponDate, LocalBondLot, LocalDepositContribution, LocalInvestment, PortfolioSnapshotRow,
 } from '@/lib/db/schema'
 
 // ============================================================
@@ -74,6 +74,7 @@ export function computePortfolioSummary(
   rates: ExchangeRates,
   depositContributions: LocalDepositContribution[] = [],
   bondCouponDates: LocalBondCouponDate[] = [],
+  bondLots: LocalBondLot[] = [],
   fiscalYearStartMonth: number = getFiscalYearStartMonth()
 ): PortfolioSummary {
   const byType = new Map<InvestmentType, { invested: number; currentValue: number }>()
@@ -92,6 +93,13 @@ export function computePortfolioSummary(
     couponDatesByInvestment.set(d.investment_id, list)
   }
 
+  const lotsByInvestment = new Map<string, LocalBondLot[]>()
+  for (const l of bondLots) {
+    const list = lotsByInvestment.get(l.investment_id) ?? []
+    list.push(l)
+    lotsByInvestment.set(l.investment_id, list)
+  }
+
   for (const inv of investments) {
     // Для депозиту "вкладено" — початковий внесок + усі поповнення за строк,
     // а "поточна вартість" — сума на кінець останнього місяця строку
@@ -106,7 +114,7 @@ export function computePortfolioSummary(
       investedRaw = totals.invested
       currentRaw = totals.currentValue
     } else if (inv.type === 'bond') {
-      const totals = computeBondTotals(inv, couponDatesByInvestment.get(inv.id) ?? [])
+      const totals = computeBondTotals(inv, couponDatesByInvestment.get(inv.id) ?? [], lotsByInvestment.get(inv.id) ?? [])
       investedRaw = totals.invested
       currentRaw = totals.currentValue
     } else {
@@ -136,7 +144,7 @@ export function computePortfolioSummary(
   const bonds = investments.filter((inv) => inv.type === 'bond')
   if (bonds.length === 0) return summary
 
-  const currentYearBondProfitUah = getCurrentYearBondProfitUah(bonds, couponDatesByInvestment, fiscalYearStartMonth, rates)
+  const currentYearBondProfitUah = getCurrentYearBondProfitUah(bonds, couponDatesByInvestment, lotsByInvestment, fiscalYearStartMonth, rates)
 
   const rows = summary.rows.map((row) => {
     if (row.type !== 'bond') return row

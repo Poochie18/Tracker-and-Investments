@@ -2,11 +2,12 @@ import { Money } from '@/lib/utils/money'
 import { getCurrentFiscalYear } from '@/lib/settings/fiscal-year'
 import { aggregateBondProfitByYear } from '../bond-schedule'
 import type { ExchangeRates } from '@/lib/investments/exchange-rate'
-import type { LocalBondCouponDate, LocalInvestment } from '@/lib/db/schema'
+import type { LocalBondCouponDate, LocalBondLot, LocalInvestment } from '@/lib/db/schema'
 
 interface BondFiscalYearTableProps {
   bonds: LocalInvestment[]
   bondCouponDates: LocalBondCouponDate[]
+  bondLots: LocalBondLot[]
   rates: ExchangeRates
   fiscalYearStartMonth: number
 }
@@ -16,7 +17,7 @@ interface BondFiscalYearTableProps {
 // з Excel). Купонні виплати йдуть у рік своєї дати; різниця між сумою
 // погашення і сумою купівлі — у рік дати погашення. Суми зведені в
 // гривню, щоб облігації різних валют можна було показати в одній таблиці.
-export function BondFiscalYearTable({ bonds, bondCouponDates, rates, fiscalYearStartMonth }: BondFiscalYearTableProps) {
+export function BondFiscalYearTable({ bonds, bondCouponDates, bondLots, rates, fiscalYearStartMonth }: BondFiscalYearTableProps) {
   const couponDatesByInvestment = new Map<string, LocalBondCouponDate[]>()
   for (const d of bondCouponDates) {
     const list = couponDatesByInvestment.get(d.investment_id) ?? []
@@ -24,7 +25,14 @@ export function BondFiscalYearTable({ bonds, bondCouponDates, rates, fiscalYearS
     couponDatesByInvestment.set(d.investment_id, list)
   }
 
-  const byYear = aggregateBondProfitByYear(bonds, couponDatesByInvestment, fiscalYearStartMonth, rates)
+  const lotsByInvestment = new Map<string, LocalBondLot[]>()
+  for (const l of bondLots) {
+    const list = lotsByInvestment.get(l.investment_id) ?? []
+    list.push(l)
+    lotsByInvestment.set(l.investment_id, list)
+  }
+
+  const byYear = aggregateBondProfitByYear(bonds, couponDatesByInvestment, lotsByInvestment, fiscalYearStartMonth, rates)
   if (byYear.length === 0) return null
 
   const currentYearKey = getCurrentFiscalYear(fiscalYearStartMonth).key

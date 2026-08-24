@@ -2,10 +2,10 @@ import { db } from '@/lib/db'
 import { supabase } from '@/lib/supabase'
 import type {
   LocalTransaction, LocalCategory, LocalAccount, LocalInvestment, LocalDepositContribution,
-  LocalBondCouponDate, LocalPortfolioSnapshot,
+  LocalBondCouponDate, LocalBondLot, LocalPortfolioSnapshot,
 } from '@/lib/db/schema'
 // Типи використовуються у деструктуризації нижче
-void (0 as unknown as LocalTransaction | LocalCategory | LocalAccount | LocalInvestment | LocalDepositContribution | LocalBondCouponDate | LocalPortfolioSnapshot)
+void (0 as unknown as LocalTransaction | LocalCategory | LocalAccount | LocalInvestment | LocalDepositContribution | LocalBondCouponDate | LocalBondLot | LocalPortfolioSnapshot)
 
 // ============================================================
 // Sync Queue — відповідає за push pending записів у Supabase.
@@ -219,6 +219,37 @@ async function pushBondCouponDates(userId: string): Promise<PushResult> {
   return result
 }
 
+// Push партій (лотів) купівлі облігацій
+async function pushBondLots(userId: string): Promise<PushResult> {
+  const pending = await db.bondLots
+    .where('user_id').equals(userId)
+    .filter((l) => l._sync_status === 'pending')
+    .toArray()
+
+  if (pending.length === 0) return { successCount: 0, errorCount: 0, errors: [] }
+
+  const result: PushResult = { successCount: 0, errorCount: 0, errors: [] }
+
+  for (const lot of pending) {
+    const { _sync_status, _sync_error, _local_updated_at, ...supabaseData } = lot
+
+    const { error } = await supabase
+      .from('bond_lots')
+      .upsert(supabaseData, { onConflict: 'id' })
+
+    if (error) {
+      result.errorCount++
+      result.errors.push(`bond-lot ${lot.id}: ${error.message}`)
+      await db.bondLots.update(lot.id, { _sync_status: 'error', _sync_error: error.message })
+    } else {
+      result.successCount++
+      await db.bondLots.update(lot.id, { _sync_status: 'synced', _sync_error: null })
+    }
+  }
+
+  return result
+}
+
 // Push зліпків портфеля
 async function pushPortfolioSnapshots(userId: string): Promise<PushResult> {
   const pending = await db.portfolioSnapshots
@@ -252,48 +283,51 @@ async function pushPortfolioSnapshots(userId: string): Promise<PushResult> {
 
 // Чи є взагалі pending записи?
 export async function hasPendingRecords(userId: string): Promise<boolean> {
-  const [txCount, catCount, accCount, invCount, depContribCount, bondDateCount, snapshotCount] = await Promise.all([
+  const [txCount, catCount, accCount, invCount, depContribCount, bondDateCount, bondLotCount, snapshotCount] = await Promise.all([
     db.transactions.where('user_id').equals(userId).filter((t) => t._sync_status === 'pending').count(),
     db.categories.where('user_id').equals(userId).filter((c) => c._sync_status === 'pending').count(),
     db.accounts.where('user_id').equals(userId).filter((a) => a._sync_status === 'pending').count(),
     db.investments.where('user_id').equals(userId).filter((i) => i._sync_status === 'pending').count(),
     db.depositContributions.where('user_id').equals(userId).filter((c) => c._sync_status === 'pending').count(),
     db.bondCouponDates.where('user_id').equals(userId).filter((d) => d._sync_status === 'pending').count(),
+    db.bondLots.where('user_id').equals(userId).filter((l) => l._sync_status === 'pending').count(),
     db.portfolioSnapshots.where('user_id').equals(userId).filter((s) => s._sync_status === 'pending').count(),
   ])
-  return txCount + catCount + accCount + invCount + depContribCount + bondDateCount + snapshotCount > 0
+  return txCount + catCount + accCount + invCount + depContribCount + bondDateCount + bondLotCount + snapshotCount > 0
 }
 
 // Рахуємо кількість помилок (для SyncStatusIndicator)
 export async function countSyncErrors(userId: string): Promise<number> {
-  const [txErr, catErr, accErr, invErr, depContribErr, bondDateErr, snapshotErr] = await Promise.all([
+  const [txErr, catErr, accErr, invErr, depContribErr, bondDateErr, bondLotErr, snapshotErr] = await Promise.all([
     db.transactions.where('user_id').equals(userId).filter((t) => t._sync_status === 'error').count(),
     db.categories.where('user_id').equals(userId).filter((c) => c._sync_status === 'error').count(),
     db.accounts.where('user_id').equals(userId).filter((a) => a._sync_status === 'error').count(),
     db.investments.where('user_id').equals(userId).filter((i) => i._sync_status === 'error').count(),
     db.depositContributions.where('user_id').equals(userId).filter((c) => c._sync_status === 'error').count(),
     db.bondCouponDates.where('user_id').equals(userId).filter((d) => d._sync_status === 'error').count(),
+    db.bondLots.where('user_id').equals(userId).filter((l) => l._sync_status === 'error').count(),
     db.portfolioSnapshots.where('user_id').equals(userId).filter((s) => s._sync_status === 'error').count(),
   ])
-  return txErr + catErr + accErr + invErr + depContribErr + bondDateErr + snapshotErr
+  return txErr + catErr + accErr + invErr + depContribErr + bondDateErr + bondLotErr + snapshotErr
 }
 
 // Головна функція черги: push всіх pending записів
 export async function flushSyncQueue(userId: string): Promise<PushResult> {
-  const [txResult, catResult, accResult, invResult, depContribResult, bondDateResult, snapshotResult] = await Promise.all([
+  const [txResult, catResult, accResult, invResult, depContribResult, bondDateResult, bondLotResult, snapshotResult] = await Promise.all([
     pushTransactions(userId),
     pushCategories(userId),
     pushAccounts(userId),
     pushInvestments(userId),
     pushDepositContributions(userId),
     pushBondCouponDates(userId),
+    pushBondLots(userId),
     pushPortfolioSnapshots(userId),
   ])
 
   return {
-    successCount: txResult.successCount + catResult.successCount + accResult.successCount + invResult.successCount + depContribResult.successCount + bondDateResult.successCount + snapshotResult.successCount,
-    errorCount: txResult.errorCount + catResult.errorCount + accResult.errorCount + invResult.errorCount + depContribResult.errorCount + bondDateResult.errorCount + snapshotResult.errorCount,
-    errors: [...txResult.errors, ...catResult.errors, ...accResult.errors, ...invResult.errors, ...depContribResult.errors, ...bondDateResult.errors, ...snapshotResult.errors],
+    successCount: txResult.successCount + catResult.successCount + accResult.successCount + invResult.successCount + depContribResult.successCount + bondDateResult.successCount + bondLotResult.successCount + snapshotResult.successCount,
+    errorCount: txResult.errorCount + catResult.errorCount + accResult.errorCount + invResult.errorCount + depContribResult.errorCount + bondDateResult.errorCount + bondLotResult.errorCount + snapshotResult.errorCount,
+    errors: [...txResult.errors, ...catResult.errors, ...accResult.errors, ...invResult.errors, ...depContribResult.errors, ...bondDateResult.errors, ...bondLotResult.errors, ...snapshotResult.errors],
   }
 }
 
