@@ -60,12 +60,21 @@ async function pushTable<T extends { id: string } & SyncFields>(
 
   if (pending.length === 0) return { successCount: 0, errorCount: 0, errors: [] }
 
+  // `T` тут спільний generic для восьми РІЗНИХ таблиць (кожен виклик
+  // pushTable<...> нижче підставляє свій конкретний тип) — ані Supabase-клієнт
+  // (перевіряє точну форму рядка проти конкретної таблиці зі схеми, не
+  // проти абстрактного T), ані Dexie (.update() очікує конкретний тип ключа
+  // для конкретної таблиці) не можуть це перевірити на рівні generic-обгортки.
+  // Кожен окремий виклик pushTable<LocalX>(db.x, 'x', ...) — конкретний і
+  // типобезпечний, це саме межа абстракції, не реальна відсутність типів.
   const rows = pending.map(stripLocalFields)
-  const { error } = await supabase.from(supabaseTable).upsert(rows, { onConflict: 'id' })
+  const { error } = await supabase.from(supabaseTable).upsert(rows as never, { onConflict: 'id' })
 
   if (!error) {
     await Promise.all(
-      pending.map((r) => table.update(r.id, { _sync_status: 'synced', _sync_error: null } as Partial<T>))
+      pending.map((r) =>
+        table.update(r.id as never, { _sync_status: 'synced', _sync_error: null } as never)
+      )
     )
     return { successCount: pending.length, errorCount: 0, errors: [] }
   }
@@ -76,15 +85,15 @@ async function pushTable<T extends { id: string } & SyncFields>(
   for (const record of pending) {
     const { error: rowError } = await supabase
       .from(supabaseTable)
-      .upsert(stripLocalFields(record), { onConflict: 'id' })
+      .upsert(stripLocalFields(record) as never, { onConflict: 'id' })
 
     if (rowError) {
       result.errorCount++
       result.errors.push(`${label} ${record.id}: ${rowError.message}`)
-      await table.update(record.id, { _sync_status: 'error', _sync_error: rowError.message } as Partial<T>)
+      await table.update(record.id as never, { _sync_status: 'error', _sync_error: rowError.message } as never)
     } else {
       result.successCount++
-      await table.update(record.id, { _sync_status: 'synced', _sync_error: null } as Partial<T>)
+      await table.update(record.id as never, { _sync_status: 'synced', _sync_error: null } as never)
     }
   }
 
