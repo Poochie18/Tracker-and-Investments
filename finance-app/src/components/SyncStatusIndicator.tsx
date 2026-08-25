@@ -1,13 +1,23 @@
 import { useState } from 'react'
-import { CheckCircle2, Loader2, WifiOff, AlertCircle } from 'lucide-react'
+import { CheckCircle2, Loader2, WifiOff, AlertCircle, RefreshCw } from 'lucide-react'
 import { useSyncContext } from '@/lib/sync/sync-context'
 import type { SyncState } from '@/lib/sync/sync-engine'
 
 // Іконка стану синхронізації у правому верхньому куті.
-// При тапі — показує деталі.
+// При тапі — показує деталі + кнопку повного оновлення (pull + push).
 export function SyncStatusIndicator() {
-  const { syncState, triggerSync } = useSyncContext()
+  const { syncState, manualSync } = useSyncContext()
   const [showDetails, setShowDetails] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+
+  const handleManualSync = async () => {
+    setRefreshing(true)
+    try {
+      await manualSync()
+    } finally {
+      setRefreshing(false)
+    }
+  }
 
   const config = SYNC_STATE_CONFIG[syncState]
 
@@ -37,15 +47,18 @@ export function SyncStatusIndicator() {
           <p className="text-xs mb-3" style={{ color: 'var(--color-text-secondary)' }}>
             {config.description}
           </p>
-          {(syncState === 'pending' || syncState === 'error') && (
-            <button
-              onClick={() => { triggerSync(); setShowDetails(false) }}
-              className="text-xs px-3 py-1.5 rounded-xl"
-              style={{ backgroundColor: 'var(--color-accent)', color: '#1B2A2A' }}
-            >
-              Синхронізувати зараз
-            </button>
-          )}
+          {/* Завжди доступна, не лише при pending/error — тягне свіжі дані
+              з інших пристроїв (pull), а не тільки відправляє локальні
+              зміни (те, що робив старий triggerSync). */}
+          <button
+            onClick={handleManualSync}
+            disabled={refreshing || syncState === 'offline'}
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl disabled:opacity-50"
+            style={{ backgroundColor: 'var(--color-accent)', color: '#1B2A2A' }}
+          >
+            <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
+            {refreshing ? 'Оновлюємо...' : 'Оновити дані'}
+          </button>
           <button
             onClick={() => setShowDetails(false)}
             className="block mt-2 text-xs"

@@ -1,6 +1,7 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { ChevronRight, Tag, Archive, LogOut, Info, Wrench, Trash2, UploadCloud } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { ChevronRight, Tag, Archive, LogOut, Info, Wrench, Trash2, UploadCloud, KeyRound } from 'lucide-react'
+import { CryptoApiKeysModal } from './CryptoApiKeysModal'
 import { useAuth } from '@/hooks/use-auth'
 import { useQueryClient } from '@tanstack/react-query'
 import { deduplicateCategories } from '@/lib/auth/first-login-setup'
@@ -15,10 +16,28 @@ import { MONTH_NAMES_UK, useFiscalYearStartMonth, setFiscalYearStartMonth } from
 
 export function SettingsScreen() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { user, signOut } = useAuth()
   const queryClient = useQueryClient()
   const [signingOut, setSigningOut] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
+  const [showCryptoKeys, setShowCryptoKeys] = useState(false)
+
+  // Посилання з вкладки "Крипта" ("Підключи Binance") веде сюди з
+  // ?openCryptoKeys=1 — одразу відкриваємо модалку ключів, замість того
+  // щоб лишати користувача самого шукати потрібний пункт у списку.
+  useEffect(() => {
+    if (searchParams.get('openCryptoKeys') === '1') {
+      // Одноразова синхронізація UI-стану з зовнішнім джерелом (URL) при
+      // заході за посиланням — саме той легітимний випадок setState в
+      // ефекті, який правило описує як допустимий виняток.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setShowCryptoKeys(true)
+      searchParams.delete('openCryptoKeys')
+      setSearchParams(searchParams, { replace: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const [dedupMsg, setDedupMsg] = useState<string | null>(null)
   const [deduping, setDeduping] = useState(false)
   const [syncingCats, setSyncingCats] = useState(false)
@@ -208,6 +227,13 @@ export function SettingsScreen() {
             ))}
           </select>
         </div>
+
+        <SettingsItem
+          icon={<KeyRound size={18} />}
+          label="API-ключі бірж"
+          description="Binance та інші джерела автосинхронізації крипти"
+          onPress={() => setShowCryptoKeys(true)}
+        />
 
         {/* ── Секція: дані ────────────────────────────────── */}
         <p className="text-xs font-medium px-1 mb-1" style={{ color: 'var(--color-text-secondary)' }}>
@@ -453,6 +479,8 @@ export function SettingsScreen() {
           </div>
         </div>
       )}
+
+      {showCryptoKeys && <CryptoApiKeysModal onClose={() => setShowCryptoKeys(false)} />}
     </div>
   )
 }

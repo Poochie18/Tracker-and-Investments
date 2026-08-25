@@ -58,6 +58,20 @@ export function useUpdateInvestmentPrice(userId: string) {
   })
 }
 
+// Пенсіл біля АГРЕГОВАНОГО "Вкладено" на вкладці Крипта — масштабує
+// собівартість усіх крипто-рядків користувача пропорційно, щоб їх сума
+// стала новим введеним значенням (див. investmentsRepo.scaleCryptoInvested).
+export function useScaleCryptoInvested(userId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (newTotalUnits: number) => investmentsRepo.scaleCryptoInvested(userId, newTotalUnits),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: investmentKeys.all(userId) })
+    },
+  })
+}
+
 export function useDeleteInvestment(userId: string) {
   const queryClient = useQueryClient()
 

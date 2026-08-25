@@ -10,6 +10,9 @@ import { SyncEngine, type SyncState } from './sync-engine'
 interface SyncContextValue {
   syncState: SyncState
   triggerSync: () => void
+  // Повний pull з Supabase + push — на відміну від triggerSync (тільки
+  // push pending), реально підтягує свіжі дані з інших пристроїв.
+  manualSync: () => Promise<void>
 }
 
 export const SyncStatusContext = createContext<SyncContextValue | null>(null)
@@ -45,8 +48,12 @@ export function SyncProvider({ userId, children }: SyncProviderProps) {
     void engineRef.current?.triggerSync()
   }
 
+  const manualSync = async () => {
+    await engineRef.current?.manualSync()
+  }
+
   return (
-    <SyncStatusContext.Provider value={{ syncState, triggerSync }}>
+    <SyncStatusContext.Provider value={{ syncState, triggerSync, manualSync }}>
       {children}
     </SyncStatusContext.Provider>
   )

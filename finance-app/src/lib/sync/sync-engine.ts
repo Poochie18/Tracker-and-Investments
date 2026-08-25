@@ -114,6 +114,43 @@ export class SyncEngine {
     }
   }
 
+  // Публічний метод для кнопки "Синхронізувати зараз" — на відміну від
+  // triggerSync() (тільки push pending-записів), робить повний PULL
+  // з Supabase (як initialPull, але без гварду "тільки якщо Dexie порожня")
+  // + після цього push. Потрібен, бо: 1) Realtime може бути не увімкнено
+  // для якоїсь таблиці (postgres_changes мовчить), 2) initialPull
+  // пропускається, якщо на пристрої вже є хоч якісь локальні дані —
+  // тож новий пристрій міг ніколи не отримати щось, додане на іншому.
+  async manualSync(): Promise<void> {
+    if (isDevOfflineMode()) return
+    if (!onlineDetector.isOnline) {
+      this.onStateChange('offline')
+      return
+    }
+    if (this.isSyncing) return
+    this.isSyncing = true
+    this.onStateChange('syncing')
+
+    try {
+      await this.pullAll()
+      const result = await flushSyncQueue(this.userId)
+
+      if (result.errorCount > 0) {
+        this.onStateChange('error')
+      } else if (await hasPendingRecords(this.userId)) {
+        this.onStateChange('pending')
+      } else {
+        this.onStateChange('idle')
+      }
+
+      this.invalidateQueries()
+    } catch {
+      this.onStateChange('error')
+    } finally {
+      this.isSyncing = false
+    }
+  }
+
   private async sync(): Promise<void> {
     if (this.isSyncing) return
     this.isSyncing = true
@@ -147,7 +184,13 @@ export class SyncEngine {
   // Потрібно якщо юзер увійшов на новому пристрої де Dexie порожня.
 
   async initialPull(): Promise<void> {
-    // Якщо Dexie вже має дані цього юзера — пропускаємо initial pull
+    // Якщо Dexie вже має дані цього юзера — пропускаємо initial pull.
+    // УВАГА: це грубий гвард лише по transactions/accounts — якщо на
+    // пристрої вже є будь-які локальні дані (напр. з попереднього тесту),
+    // pull повністю пропускається, і інвестиції/крипта з іншого пристрою
+    // сюди могли ніколи не потрапити. Для гарантованого підвантаження
+    // всього — manualSync() (кнопка "Синхронізувати зараз"), який пуляє
+    // pullAll() завжди, без цього гварду.
     const localCount = await db.transactions
       .where('user_id').equals(this.userId).count()
 
@@ -157,7 +200,13 @@ export class SyncEngine {
     if (hasAccounts && localCount > 0) return
 
     this.onStateChange('syncing')
+    await this.pullAll()
+    this.invalidateQueries()
+  }
 
+  // Повний pull усіх таблиць з Supabase у Dexie — без гварду. Викликається
+  // і з initialPull (після перевірки), і напряму з manualSync().
+  private async pullAll(): Promise<void> {
     await Promise.all([
       this.pullAccounts(),
       this.pullCategories(),
@@ -168,8 +217,6 @@ export class SyncEngine {
       this.pullBondLots(),
       this.pullPortfolioSnapshots(),
     ])
-
-    this.invalidateQueries()
   }
 
   private async pullAccounts(): Promise<void> {
@@ -248,12 +295,22 @@ export class SyncEngine {
 
     if (!data) return
 
-    const localInvestments: LocalInvestment[] = data.map((inv) => ({
-      ...inv,
-      _sync_status: 'synced' as const,
-      _sync_error: null,
-      _local_updated_at: Date.now(),
-    }))
+    // На відміну від pullAccounts/pullCategories (рідко редагуються офлайн),
+    // investments часто мають незбережений pending-запис саме в момент
+    // manualSync() (напр. щойно відредаговану ціну купівлі синхронізованого
+    // з Binance активу) — перезаписувати його застарілими серверними даними
+    // не можна, інакше локальна зміна губиться без помітної помилки.
+    const localInvestments: LocalInvestment[] = []
+    for (const inv of data) {
+      const local = await db.investments.get(inv.id)
+      if (local && local._sync_status === 'pending' && resolveConflict(local, inv) === 'local') continue
+      localInvestments.push({
+        ...inv,
+        _sync_status: 'synced',
+        _sync_error: null,
+        _local_updated_at: Date.now(),
+      })
+    }
 
     await db.investments.bulkPut(localInvestments)
   }

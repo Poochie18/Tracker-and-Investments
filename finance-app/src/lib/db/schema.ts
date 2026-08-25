@@ -60,8 +60,12 @@ export interface Investment {
   name: string          // напр. "Apple Inc." або "Bitcoin"
   type: InvestmentType
   quantity: number       // кількість одиниць/акцій/монет (може бути дробовою)
-  purchase_price: number // ЗАВЖДИ у копійках (мінімальних одиницях валюти)! Ціна за одиницю на момент купівлі.
-  current_price: number  // ЗАВЖДИ у копійках! Поточна ціна за одиницю — оновлюється вручну.
+  // ЗАВЖДИ у копійках (мінімальних одиницях валюти)! Ціна за одиницю на
+  // момент купівлі. Для type==='crypto' може мати дробову частину — деякі
+  // токени (PEPE, SHIB, BONK) коштують частки копійки за 1 шт, округлення
+  // до цілого занулило б ціну (investments-repo.ts::toPriceMinorUnits).
+  purchase_price: number
+  current_price: number  // те саме, що purchase_price, але поточна ціна — оновлюється вручну або автосинком (крипта)
   currency: string       // валюта активу, напр. 'UAH', 'USD'
   purchase_date: string  // ISO 8601
   notes: string | null
@@ -80,6 +84,14 @@ export interface Investment {
   // ISO 8601 — дата погашення, вказується явно (не виводиться з дат виплат
   // купонів у bond_coupon_dates, бо вони можуть не збігатись).
   redemption_date: string | null
+  // Поле тільки для type === 'crypto' — тікер монети (напр. "BTC") для
+  // підтягування курсу з публічного Binance ticker API. null → авто-оновлення
+  // ціни недоступне, current_price редагується лише вручну.
+  ticker_symbol: string | null
+  // 'manual' — введено вручну; 'binance_sync' — рядок створює/оновлює
+  // синхронізація балансів з біржі (quantity/current_price оновлює лише
+  // синк, purchase_price редагує тільки користувач вручну).
+  source: 'manual' | 'binance_sync'
   created_at: string
   updated_at: string
   deleted_at: string | null  // null = активна, не-null = видалена (soft delete)

@@ -7,7 +7,7 @@ import { useInvestment, useCreateInvestment, useUpdateInvestment } from '@/hooks
 import { useBondCouponDates, bondCouponDateKeys } from '@/hooks/use-bond-coupon-dates'
 import { bondCouponDatesRepo } from '../repositories/bond-coupon-dates-repo'
 import { CategoryIconCircle } from '@/features/transactions/components/CategoryIconCircle'
-import { INVESTMENT_TYPES, INVESTMENT_TYPE_META } from '../types'
+import { ADDABLE_INVESTMENT_TYPES, INVESTMENT_TYPE_META } from '../types'
 import type { InvestmentType, LocalInvestment } from '@/lib/db/schema'
 
 const CURRENCIES = ['UAH', 'USD', 'EUR']
@@ -31,7 +31,7 @@ export function AddInvestmentScreen() {
   // ?type=deposit — коли додаємо актив із конкретної вкладки розділу
   // (напр. "Депозити"), одразу підставляємо цей тип у форму.
   const defaultTypeParam = searchParams.get('type')
-  const defaultType = INVESTMENT_TYPES.includes(defaultTypeParam as InvestmentType)
+  const defaultType = ADDABLE_INVESTMENT_TYPES.includes(defaultTypeParam as InvestmentType)
     ? (defaultTypeParam as InvestmentType)
     : undefined
 
@@ -209,8 +209,8 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType }: Inve
           <p className="text-xs font-medium mb-3" style={{ color: 'var(--color-text-secondary)' }}>
             Тип активу
           </p>
-          <div className="grid grid-cols-5 gap-2">
-            {INVESTMENT_TYPES.map((t) => {
+          <div className="grid grid-cols-4 gap-2">
+            {ADDABLE_INVESTMENT_TYPES.map((t) => {
               const meta = INVESTMENT_TYPE_META[t]
               const isSelected = t === type
               return (
@@ -253,7 +253,7 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType }: Inve
           />
         </Field>
 
-        {/* ── Кількість + Валюта ────────────────────────────── */}
+        {/* ── Кількість + Валюта ───────────────────────────────── */}
         <div className="grid grid-cols-2 gap-4">
           <Field label="Кількість" disabled={bondFieldsLocked}>
             <input
@@ -284,10 +284,10 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType }: Inve
           </Field>
         </div>
 
-        {/* ── Ціна купівлі + поточна ціна (для облігацій поточна ціна не потрібна —
-             тримаємо до погашення за номіналом) ────────────── */}
+        {/* ── Ціна купівлі + поточна ціна (для облігацій поточна ціна не
+             потрібна — тримаємо до погашення за номіналом) ──────────── */}
         <div className="grid grid-cols-2 gap-4">
-          <Field label={`Ціна купівлі (${currency})`} disabled={bondFieldsLocked}>
+          <Field label={`Ціна купівлі (середня, ${currency})`} disabled={bondFieldsLocked}>
             <input
               type="text"
               inputMode="decimal"

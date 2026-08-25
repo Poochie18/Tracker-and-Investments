@@ -1,0 +1,10 @@
+# Конфіг Supabase CLI — потрібен лише для деплою Edge Functions
+# (`supabase functions deploy <name>`). Міграції й далі застосовуються
+# вручну через Dashboard → SQL Editor, як і раніше.
+project_id = "finance-app"
+
+[functions.crypto-binance-keys]
+verify_jwt = true
+
+[functions.crypto-binance-sync]
+verify_jwt = true

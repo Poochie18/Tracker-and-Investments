@@ -10,12 +10,17 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+dev-dist
 *.local
 
 # Environment variables — НІКОЛИ не комітити .env з реальними ключами!
 .env
 .env.local
 .env.*.local
+
+# Supabase CLI — локальний кеш (project ref, версії сервісів, пулер-урл);
+# машинно-специфічне, ніяких секретів там нема, але й комітити нема сенсу.
+supabase/.temp/
 
 # Editor directories and files
 .vscode/*

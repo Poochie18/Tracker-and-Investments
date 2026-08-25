@@ -118,8 +118,13 @@ export function computePortfolioSummary(
       investedRaw = totals.invested
       currentRaw = totals.currentValue
     } else {
-      investedRaw = Math.round(inv.purchase_price * inv.quantity)
-      currentRaw = Math.round(inv.current_price * inv.quantity)
+      // Без Math.round тут — покладаємось на округлення вже в
+      // convertToUahMinorUnits нижче. Округлення саме тут (до дробової
+      // копійки в нативній валюті) для крипти (NUMERIC price) не потрібне
+      // й лише додає ще одну точку накопичення похибки при сумуванні
+      // десятків монет.
+      investedRaw = inv.purchase_price * inv.quantity
+      currentRaw = inv.current_price * inv.quantity
     }
 
     const investedUah = convertToUahMinorUnits(investedRaw, inv.currency, rates)

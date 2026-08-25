@@ -55,6 +55,8 @@ const baseInvestment: LocalInvestment = {
   coupon_amount: 8175, // 81.75 за 1 шт
   redemption_amount: 100000,
   redemption_date: '2026-12-31',
+  ticker_symbol: null,
+  source: 'manual',
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
   deleted_at: null,

@@ -1,20 +1,26 @@
+import type { EntityTable } from 'dexie'
 import { db } from '@/lib/db'
 import { supabase } from '@/lib/supabase'
 import type {
   LocalTransaction, LocalCategory, LocalAccount, LocalInvestment, LocalDepositContribution,
-  LocalBondCouponDate, LocalBondLot, LocalPortfolioSnapshot,
+  LocalBondCouponDate, LocalBondLot, LocalPortfolioSnapshot, SyncStatus,
 } from '@/lib/db/schema'
-// Типи використовуються у деструктуризації нижче
-void (0 as unknown as LocalTransaction | LocalCategory | LocalAccount | LocalInvestment | LocalDepositContribution | LocalBondCouponDate | LocalBondLot | LocalPortfolioSnapshot)
 
 // ============================================================
 // Sync Queue — відповідає за push pending записів у Supabase.
 //
 // Алгоритм для кожної таблиці:
 // 1. Вибрати всі записи з _sync_status === 'pending'
-// 2. Спробувати upsert у Supabase (insert або update)
-// 3. Успіх → _sync_status = 'synced', _sync_error = null
-// 4. Помилка → _sync_status = 'error', зберегти повідомлення
+// 2. Одним запитом upsert-нути весь пакет у Supabase (insert або update)
+// 3. Успіх → всі _sync_status = 'synced', _sync_error = null
+// 4. Помилка пакету → падаємо на по-рядковий upsert (ізолюємо саме
+//    проблемний рядок, решта валідних не блокуються ним)
+//
+// Раніше кожен pending-рядок ішов ОКРЕМИМ HTTP-запитом — при синку
+// Binance (десятки монет за раз) це було десятки запитів у мережу
+// одночасно. Пакетний upsert (масив рядків в один .upsert()) робить
+// це одним запитом; per-row fallback лишається лише для рідкісного
+// випадку, коли сам пакет повністю відхилено (напр. один "битий" рядок).
 //
 // upsert (а не insert/update окремо) — тому що ми не знаємо
 // чи запис вже є на сервері (міг бути створений на іншому пристрої).
@@ -26,255 +32,59 @@ export interface PushResult {
   errors: string[]
 }
 
-// Push транзакцій
-async function pushTransactions(userId: string): Promise<PushResult> {
-  const pending = await db.transactions
-    .where('user_id').equals(userId)
-    .filter((t) => t._sync_status === 'pending')
-    .toArray()
-
-  if (pending.length === 0) return { successCount: 0, errorCount: 0, errors: [] }
-
-  const result: PushResult = { successCount: 0, errorCount: 0, errors: [] }
-
-  for (const tx of pending) {
-    // Готуємо об'єкт без локальних полів (Supabase їх не знає)
-    const { _sync_status, _sync_error, _local_updated_at, ...supabaseData } = tx
-
-    const { error } = await supabase
-      .from('transactions')
-      .upsert(supabaseData, { onConflict: 'id' })
-
-    if (error) {
-      result.errorCount++
-      result.errors.push(`tx ${tx.id}: ${error.message}`)
-      await db.transactions.update(tx.id, {
-        _sync_status: 'error',
-        _sync_error: error.message,
-      })
-    } else {
-      result.successCount++
-      await db.transactions.update(tx.id, {
-        _sync_status: 'synced',
-        _sync_error: null,
-      })
-    }
-  }
-
-  return result
+interface SyncFields {
+  _sync_status: SyncStatus
+  _sync_error: string | null
+  _local_updated_at: number
 }
 
-// Push категорій
-async function pushCategories(userId: string): Promise<PushResult> {
-  const pending = await db.categories
-    .where('user_id').equals(userId)
-    .filter((c) => c._sync_status === 'pending')
-    .toArray()
-
-  if (pending.length === 0) return { successCount: 0, errorCount: 0, errors: [] }
-
-  const result: PushResult = { successCount: 0, errorCount: 0, errors: [] }
-
-  for (const cat of pending) {
-    const { _sync_status, _sync_error, _local_updated_at, ...supabaseData } = cat
-
-    const { error } = await supabase
-      .from('categories')
-      .upsert(supabaseData, { onConflict: 'id' })
-
-    if (error) {
-      result.errorCount++
-      result.errors.push(`cat ${cat.id}: ${error.message}`)
-      await db.categories.update(cat.id, { _sync_status: 'error', _sync_error: error.message })
-    } else {
-      result.successCount++
-      await db.categories.update(cat.id, { _sync_status: 'synced', _sync_error: null })
-    }
-  }
-
-  return result
+function stripLocalFields<T extends SyncFields>(record: T): Omit<T, keyof SyncFields> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- деструктуризація навмисно відкидає ці поля
+  const { _sync_status, _sync_error, _local_updated_at, ...rest } = record
+  return rest
 }
 
-// Push рахунків
-async function pushAccounts(userId: string): Promise<PushResult> {
-  const pending = await db.accounts
-    .where('user_id').equals(userId)
-    .filter((a) => a._sync_status === 'pending')
+// Спільна логіка пушу для будь-якої з восьми таблиць — відрізняються лише
+// Dexie-таблиця, назва таблиці в Supabase і label для повідомлень помилок.
+async function pushTable<T extends { id: string } & SyncFields>(
+  table: EntityTable<T, 'id'>,
+  supabaseTable: string,
+  label: string,
+  userId: string
+): Promise<PushResult> {
+  const pending = await table
+    .where('user_id')
+    .equals(userId)
+    .filter((r) => r._sync_status === 'pending')
     .toArray()
 
   if (pending.length === 0) return { successCount: 0, errorCount: 0, errors: [] }
 
-  const result: PushResult = { successCount: 0, errorCount: 0, errors: [] }
+  const rows = pending.map(stripLocalFields)
+  const { error } = await supabase.from(supabaseTable).upsert(rows, { onConflict: 'id' })
 
-  for (const acc of pending) {
-    const { _sync_status, _sync_error, _local_updated_at, ...supabaseData } = acc
-
-    const { error } = await supabase
-      .from('accounts')
-      .upsert(supabaseData, { onConflict: 'id' })
-
-    if (error) {
-      result.errorCount++
-      result.errors.push(`acc ${acc.id}: ${error.message}`)
-      await db.accounts.update(acc.id, { _sync_status: 'error', _sync_error: error.message })
-    } else {
-      result.successCount++
-      await db.accounts.update(acc.id, { _sync_status: 'synced', _sync_error: null })
-    }
+  if (!error) {
+    await Promise.all(
+      pending.map((r) => table.update(r.id, { _sync_status: 'synced', _sync_error: null } as Partial<T>))
+    )
+    return { successCount: pending.length, errorCount: 0, errors: [] }
   }
 
-  return result
-}
-
-// Push інвестицій
-async function pushInvestments(userId: string): Promise<PushResult> {
-  const pending = await db.investments
-    .where('user_id').equals(userId)
-    .filter((i) => i._sync_status === 'pending')
-    .toArray()
-
-  if (pending.length === 0) return { successCount: 0, errorCount: 0, errors: [] }
-
+  // Пакет впав повністю (напр. один рядок порушує constraint) — з'ясовуємо
+  // ПО-РЯДКОВО, який саме, щоб не блокувати синк усіх інших валідних записів.
   const result: PushResult = { successCount: 0, errorCount: 0, errors: [] }
+  for (const record of pending) {
+    const { error: rowError } = await supabase
+      .from(supabaseTable)
+      .upsert(stripLocalFields(record), { onConflict: 'id' })
 
-  for (const inv of pending) {
-    const { _sync_status, _sync_error, _local_updated_at, ...supabaseData } = inv
-
-    const { error } = await supabase
-      .from('investments')
-      .upsert(supabaseData, { onConflict: 'id' })
-
-    if (error) {
+    if (rowError) {
       result.errorCount++
-      result.errors.push(`inv ${inv.id}: ${error.message}`)
-      await db.investments.update(inv.id, { _sync_status: 'error', _sync_error: error.message })
+      result.errors.push(`${label} ${record.id}: ${rowError.message}`)
+      await table.update(record.id, { _sync_status: 'error', _sync_error: rowError.message } as Partial<T>)
     } else {
       result.successCount++
-      await db.investments.update(inv.id, { _sync_status: 'synced', _sync_error: null })
-    }
-  }
-
-  return result
-}
-
-// Push поповнень депозитів
-async function pushDepositContributions(userId: string): Promise<PushResult> {
-  const pending = await db.depositContributions
-    .where('user_id').equals(userId)
-    .filter((c) => c._sync_status === 'pending')
-    .toArray()
-
-  if (pending.length === 0) return { successCount: 0, errorCount: 0, errors: [] }
-
-  const result: PushResult = { successCount: 0, errorCount: 0, errors: [] }
-
-  for (const contrib of pending) {
-    const { _sync_status, _sync_error, _local_updated_at, ...supabaseData } = contrib
-
-    const { error } = await supabase
-      .from('deposit_contributions')
-      .upsert(supabaseData, { onConflict: 'id' })
-
-    if (error) {
-      result.errorCount++
-      result.errors.push(`dep-contrib ${contrib.id}: ${error.message}`)
-      await db.depositContributions.update(contrib.id, { _sync_status: 'error', _sync_error: error.message })
-    } else {
-      result.successCount++
-      await db.depositContributions.update(contrib.id, { _sync_status: 'synced', _sync_error: null })
-    }
-  }
-
-  return result
-}
-
-// Push дат виплат купонів облігацій
-async function pushBondCouponDates(userId: string): Promise<PushResult> {
-  const pending = await db.bondCouponDates
-    .where('user_id').equals(userId)
-    .filter((d) => d._sync_status === 'pending')
-    .toArray()
-
-  if (pending.length === 0) return { successCount: 0, errorCount: 0, errors: [] }
-
-  const result: PushResult = { successCount: 0, errorCount: 0, errors: [] }
-
-  for (const date of pending) {
-    const { _sync_status, _sync_error, _local_updated_at, ...supabaseData } = date
-
-    const { error } = await supabase
-      .from('bond_coupon_dates')
-      .upsert(supabaseData, { onConflict: 'id' })
-
-    if (error) {
-      result.errorCount++
-      result.errors.push(`bond-date ${date.id}: ${error.message}`)
-      await db.bondCouponDates.update(date.id, { _sync_status: 'error', _sync_error: error.message })
-    } else {
-      result.successCount++
-      await db.bondCouponDates.update(date.id, { _sync_status: 'synced', _sync_error: null })
-    }
-  }
-
-  return result
-}
-
-// Push партій (лотів) купівлі облігацій
-async function pushBondLots(userId: string): Promise<PushResult> {
-  const pending = await db.bondLots
-    .where('user_id').equals(userId)
-    .filter((l) => l._sync_status === 'pending')
-    .toArray()
-
-  if (pending.length === 0) return { successCount: 0, errorCount: 0, errors: [] }
-
-  const result: PushResult = { successCount: 0, errorCount: 0, errors: [] }
-
-  for (const lot of pending) {
-    const { _sync_status, _sync_error, _local_updated_at, ...supabaseData } = lot
-
-    const { error } = await supabase
-      .from('bond_lots')
-      .upsert(supabaseData, { onConflict: 'id' })
-
-    if (error) {
-      result.errorCount++
-      result.errors.push(`bond-lot ${lot.id}: ${error.message}`)
-      await db.bondLots.update(lot.id, { _sync_status: 'error', _sync_error: error.message })
-    } else {
-      result.successCount++
-      await db.bondLots.update(lot.id, { _sync_status: 'synced', _sync_error: null })
-    }
-  }
-
-  return result
-}
-
-// Push зліпків портфеля
-async function pushPortfolioSnapshots(userId: string): Promise<PushResult> {
-  const pending = await db.portfolioSnapshots
-    .where('user_id').equals(userId)
-    .filter((s) => s._sync_status === 'pending')
-    .toArray()
-
-  if (pending.length === 0) return { successCount: 0, errorCount: 0, errors: [] }
-
-  const result: PushResult = { successCount: 0, errorCount: 0, errors: [] }
-
-  for (const snap of pending) {
-    const { _sync_status, _sync_error, _local_updated_at, ...supabaseData } = snap
-
-    const { error } = await supabase
-      .from('portfolio_snapshots')
-      .upsert(supabaseData, { onConflict: 'id' })
-
-    if (error) {
-      result.errorCount++
-      result.errors.push(`snapshot ${snap.id}: ${error.message}`)
-      await db.portfolioSnapshots.update(snap.id, { _sync_status: 'error', _sync_error: error.message })
-    } else {
-      result.successCount++
-      await db.portfolioSnapshots.update(snap.id, { _sync_status: 'synced', _sync_error: null })
+      await table.update(record.id, { _sync_status: 'synced', _sync_error: null } as Partial<T>)
     }
   }
 
@@ -311,17 +121,18 @@ export async function countSyncErrors(userId: string): Promise<number> {
   return txErr + catErr + accErr + invErr + depContribErr + bondDateErr + bondLotErr + snapshotErr
 }
 
-// Головна функція черги: push всіх pending записів
+// Головна функція черги: push всіх pending записів, кожна таблиця — одним
+// пакетним запитом (замість запиту на кожен рядок).
 export async function flushSyncQueue(userId: string): Promise<PushResult> {
   const [txResult, catResult, accResult, invResult, depContribResult, bondDateResult, bondLotResult, snapshotResult] = await Promise.all([
-    pushTransactions(userId),
-    pushCategories(userId),
-    pushAccounts(userId),
-    pushInvestments(userId),
-    pushDepositContributions(userId),
-    pushBondCouponDates(userId),
-    pushBondLots(userId),
-    pushPortfolioSnapshots(userId),
+    pushTable<LocalTransaction>(db.transactions, 'transactions', 'tx', userId),
+    pushTable<LocalCategory>(db.categories, 'categories', 'cat', userId),
+    pushTable<LocalAccount>(db.accounts, 'accounts', 'acc', userId),
+    pushTable<LocalInvestment>(db.investments, 'investments', 'inv', userId),
+    pushTable<LocalDepositContribution>(db.depositContributions, 'deposit_contributions', 'dep-contrib', userId),
+    pushTable<LocalBondCouponDate>(db.bondCouponDates, 'bond_coupon_dates', 'bond-date', userId),
+    pushTable<LocalBondLot>(db.bondLots, 'bond_lots', 'bond-lot', userId),
+    pushTable<LocalPortfolioSnapshot>(db.portfolioSnapshots, 'portfolio_snapshots', 'snapshot', userId),
   ])
 
   return {
@@ -330,4 +141,3 @@ export async function flushSyncQueue(userId: string): Promise<PushResult> {
     errors: [...txResult.errors, ...catResult.errors, ...accResult.errors, ...invResult.errors, ...depContribResult.errors, ...bondDateResult.errors, ...bondLotResult.errors, ...snapshotResult.errors],
   }
 }
-

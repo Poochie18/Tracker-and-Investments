@@ -1,12 +1,22 @@
 import { v4 as uuidv4 } from 'uuid'
 import { db } from '@/lib/db'
-import type { LocalInvestment } from '@/lib/db/schema'
+import type { InvestmentType, LocalInvestment } from '@/lib/db/schema'
 import type { InvestmentFormData } from '../types'
 import { bondLotsRepo } from './bond-lots-repo'
 
 // Репозиторій для роботи з інвестиціями через Dexie (IndexedDB).
 // Той самий патерн, що і transactions-repo / categories-repo:
 // пишемо тільки локально, _sync_status='pending' підхоплює sync-engine.
+
+// Ціна за 1 шт у "копійках" — округлення до цілої копійки коректне для
+// акцій/облігацій/депозитів (там ціна завжди щонайменше кілька центів),
+// але для крипти (PEPE, SHIB, BONK — частки копійки за 1 токен) округлення
+// до цілого занулило б ціну повністю (0.000009 * 100 → округлюється до 0).
+// Для крипти лишаємо дробову частину — фінальна сума (ціна × кількість)
+// округлюється вже при показі підсумків (Money.fromKopiyky), не тут.
+function toPriceMinorUnits(amount: number, type: InvestmentType): number {
+  return type === 'crypto' ? amount * 100 : Math.round(amount * 100)
+}
 
 export const investmentsRepo = {
   // Всі активні (не видалені) інвестиції користувача
@@ -33,8 +43,8 @@ export const investmentsRepo = {
       name: data.name,
       type: data.type,
       quantity: data.quantity,
-      purchase_price: Math.round(data.purchasePrice * 100),
-      current_price: Math.round(currentPrice * 100),
+      purchase_price: toPriceMinorUnits(data.purchasePrice, data.type),
+      current_price: toPriceMinorUnits(currentPrice, data.type),
       currency: data.currency,
       purchase_date: data.purchaseDate.toISOString(),
       notes: data.notes?.trim() || null,
@@ -43,6 +53,8 @@ export const investmentsRepo = {
       coupon_amount: data.type === 'bond' && data.couponAmount != null ? Math.round(data.couponAmount * 100) : null,
       redemption_amount: data.type === 'bond' && data.redemptionAmount != null ? Math.round(data.redemptionAmount * 100) : null,
       redemption_date: data.type === 'bond' && data.redemptionDate ? data.redemptionDate.toISOString() : null,
+      ticker_symbol: data.type === 'crypto' && data.tickerSymbol ? data.tickerSymbol.trim().toUpperCase() : null,
+      source: 'manual',
       created_at: now,
       updated_at: now,
       deleted_at: null,
@@ -73,8 +85,8 @@ export const investmentsRepo = {
       name: data.name,
       type: data.type,
       quantity: data.quantity,
-      purchase_price: Math.round(data.purchasePrice * 100),
-      current_price: Math.round(currentPrice * 100),
+      purchase_price: toPriceMinorUnits(data.purchasePrice, data.type),
+      current_price: toPriceMinorUnits(currentPrice, data.type),
       currency: data.currency,
       purchase_date: data.purchaseDate.toISOString(),
       notes: data.notes?.trim() || null,
@@ -83,6 +95,10 @@ export const investmentsRepo = {
       coupon_amount: data.type === 'bond' && data.couponAmount != null ? Math.round(data.couponAmount * 100) : null,
       redemption_amount: data.type === 'bond' && data.redemptionAmount != null ? Math.round(data.redemptionAmount * 100) : null,
       redemption_date: data.type === 'bond' && data.redemptionDate ? data.redemptionDate.toISOString() : null,
+      ticker_symbol: data.type === 'crypto' && data.tickerSymbol ? data.tickerSymbol.trim().toUpperCase() : null,
+      // source навмисно не чіпаємо тут — рядок, створений синком біржі
+      // (source='binance_sync'), лишається таким і при ручному редагуванні
+      // ціни купівлі через цю ж форму.
       updated_at: new Date().toISOString(),
       _sync_status: 'pending',
       _local_updated_at: Date.now(),
@@ -91,12 +107,66 @@ export const investmentsRepo = {
 
   // Швидке оновлення тільки поточної ціни (без відкриття повної форми)
   async updateCurrentPrice(id: string, currentPriceUnits: number): Promise<void> {
+    const existing = await db.investments.get(id)
     await db.investments.update(id, {
-      current_price: Math.round(currentPriceUnits * 100),
+      current_price: toPriceMinorUnits(currentPriceUnits, existing?.type ?? 'other'),
       updated_at: new Date().toISOString(),
       _sync_status: 'pending',
       _local_updated_at: Date.now(),
     })
+  },
+
+  // Пропорційно масштабує собівартість (purchase_price) УСІХ крипто-активів
+  // користувача так, щоб їх сумарне "Вкладено" стало newTotalUnits (у
+  // "копійках" USD). Для пенсіла біля АГРЕГОВАНОГО "Вкладено" на вкладці
+  // Крипта — саму суму редагувати напряму нема сенсу (вона похідна від N
+  // рядків), тож розподіляємо зміну пропорційно по монетах: множимо
+  // purchase_price кожної на один коефіцієнт (invested_i = purchase_price_i
+  // × quantity_i, тож множення purchase_price_i на ratio масштабує
+  // invested_i на той самий ratio незалежно від quantity).
+  async scaleCryptoInvested(userId: string, newTotalUnits: number): Promise<void> {
+    const cryptoInvestments = await db.investments
+      .where('user_id')
+      .equals(userId)
+      .filter((i) => i.type === 'crypto' && i.deleted_at === null)
+      .toArray()
+    if (cryptoInvestments.length === 0) return
+
+    const now = new Date().toISOString()
+    const oldTotal = cryptoInvestments.reduce((sum, i) => sum + i.purchase_price * i.quantity, 0)
+
+    if (oldTotal > 0) {
+      const ratio = newTotalUnits / oldTotal
+      await Promise.all(
+        cryptoInvestments.map((i) =>
+          db.investments.update(i.id, {
+            purchase_price: i.purchase_price * ratio,
+            updated_at: now,
+            _sync_status: 'pending',
+            _local_updated_at: Date.now(),
+          })
+        )
+      )
+      return
+    }
+
+    // Нема з чого масштабувати (усі purchase_price = 0, напр. щойно
+    // підключений синк) — розподіляємо пропорційно поточній вартості;
+    // якщо й вона нульова — рівними частками між монетами.
+    const totalCurrentValue = cryptoInvestments.reduce((sum, i) => sum + i.current_price * i.quantity, 0)
+    await Promise.all(
+      cryptoInvestments.map((i) => {
+        const weight =
+          totalCurrentValue > 0 ? (i.current_price * i.quantity) / totalCurrentValue : 1 / cryptoInvestments.length
+        const newPurchasePrice = i.quantity > 0 ? (newTotalUnits * weight) / i.quantity : 0
+        return db.investments.update(i.id, {
+          purchase_price: newPurchasePrice,
+          updated_at: now,
+          _sync_status: 'pending',
+          _local_updated_at: Date.now(),
+        })
+      })
+    )
   },
 
   // Soft delete — як і транзакції, щоб інші пристрої дізнались про видалення
