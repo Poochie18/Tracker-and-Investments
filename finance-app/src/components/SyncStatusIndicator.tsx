@@ -40,62 +40,58 @@ export function SyncStatusIndicator() {
         />
       </button>
 
-      {/* Деталі — дропдаун нижче кнопки */}
+      {/* Деталі — дропдаун нижче кнопки, закривається кліком поза ним */}
       {showDetails && (
-        <div
-          className="absolute right-0 rounded-2xl p-4 z-50 shadow-xl min-w-48"
-          style={{ top: 'calc(100% + 4px)', backgroundColor: 'var(--color-bg-card)' }}
-        >
-          <p className="text-sm font-semibold mb-1" style={{ color: 'var(--color-text-primary)' }}>
-            {config.label}
-          </p>
-          <p className="text-xs mb-3" style={{ color: 'var(--color-text-secondary)' }}>
-            {config.description}
-          </p>
-          {syncState === 'local-only' ? (
-            <button
-              onClick={() => {
-                if (isGuest) {
-                  // Позначаємо гостьові дані на перенесення (як і кнопка
-                  // "Створити акаунт" у Налаштуваннях) — інакше після входу
-                  // через Google локальні дані лишаться "осиротілими".
-                  markPendingGuestMigration()
-                  disableGuestMode()
-                  // navigate(), не window.location.href — див. коментар у LoginScreen.tsx
-                  setShowDetails(false)
-                  navigate('/login')
-                } else {
-                  setShowDetails(false)
-                  navigate('/settings')
-                }
-              }}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl"
-              style={{ backgroundColor: 'var(--color-accent)', color: '#1B2A2A' }}
-            >
-              {isGuest ? 'Авторизуйтесь, щоб синхронізувати' : 'Увімкнути в Налаштуваннях'}
-            </button>
-          ) : (
-            /* Завжди доступна, не лише при pending/error — тягне свіжі дані
-               з інших пристроїв (pull), а не тільки відправляє локальні
-               зміни (те, що робив старий triggerSync). */
-            <button
-              onClick={handleManualSync}
-              disabled={refreshing || syncState === 'offline'}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl disabled:opacity-50"
-              style={{ backgroundColor: 'var(--color-accent)', color: '#1B2A2A' }}
-            >
-              <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
-              {refreshing ? 'Оновлюємо...' : 'Оновити дані'}
-            </button>
-          )}
-          <button
-            onClick={() => setShowDetails(false)}
-            className="block mt-2 text-xs"
-            style={{ color: 'var(--color-text-secondary)' }}
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setShowDetails(false)} />
+          <div
+            className="absolute right-0 rounded-2xl p-4 z-50 shadow-xl min-w-48"
+            style={{ top: 'calc(100% + 4px)', backgroundColor: 'var(--color-bg-card)' }}
           >
-            Закрити
-          </button>
-        </div>
+            <p className="text-sm font-semibold mb-1" style={{ color: 'var(--color-text-primary)' }}>
+              {config.label}
+            </p>
+            <p className="text-xs mb-3" style={{ color: 'var(--color-text-secondary)' }}>
+              {config.description}
+            </p>
+            {syncState === 'local-only' ? (
+              <button
+                onClick={() => {
+                  if (isGuest) {
+                    // Позначаємо гостьові дані на перенесення (як і кнопка
+                    // "Створити акаунт" у Налаштуваннях) — інакше після входу
+                    // через Google локальні дані лишаться "осиротілими".
+                    markPendingGuestMigration()
+                    disableGuestMode()
+                    // navigate(), не window.location.href — див. коментар у LoginScreen.tsx
+                    setShowDetails(false)
+                    navigate('/login')
+                  } else {
+                    setShowDetails(false)
+                    navigate('/settings')
+                  }
+                }}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl"
+                style={{ backgroundColor: 'var(--color-accent)', color: '#1B2A2A' }}
+              >
+                {isGuest ? 'Авторизуйтесь, щоб синхронізувати' : 'Увімкнути в Налаштуваннях'}
+              </button>
+            ) : (
+              /* Завжди доступна, не лише при pending/error — тягне свіжі дані
+                 з інших пристроїв (pull), а не тільки відправляє локальні
+                 зміни (те, що робив старий triggerSync). */
+              <button
+                onClick={handleManualSync}
+                disabled={refreshing || syncState === 'offline'}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl disabled:opacity-50"
+                style={{ backgroundColor: 'var(--color-accent)', color: '#1B2A2A' }}
+              >
+                <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
+                {refreshing ? 'Оновлюємо...' : 'Оновити дані'}
+              </button>
+            )}
+          </div>
+        </>
       )}
     </div>
   )
