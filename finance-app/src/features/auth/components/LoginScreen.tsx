@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Wallet } from 'lucide-react'
 import { authClient } from '@/lib/auth/auth-client'
 import { enableDevOfflineMode } from '@/lib/auth/dev-bypass'
+import { enableGuestMode } from '@/lib/auth/local-mode'
 
 export function LoginScreen() {
   const [loading, setLoading] = useState(false)
@@ -74,6 +75,20 @@ export function LoginScreen() {
 
         <p className="text-xs text-center" style={{ color: 'var(--color-text-secondary)' }}>
           Ваші дані зберігаються тільки на вашому акаунті і захищені Google OAuth
+        </p>
+
+        <button
+          onClick={() => {
+            enableGuestMode()
+            window.location.href = '/overview'
+          }}
+          className="w-full py-2.5 rounded-xl text-sm font-medium mt-1 transition-opacity active:opacity-70"
+          style={{ backgroundColor: 'transparent', color: 'var(--color-text-secondary)', textDecoration: 'underline' }}
+        >
+          Продовжити як гість
+        </button>
+        <p className="text-xs text-center -mt-2" style={{ color: 'var(--color-text-secondary)' }}>
+          Дані зберігатимуться лише на цьому пристрої, без хмари
         </p>
 
         {showDevLogin && (

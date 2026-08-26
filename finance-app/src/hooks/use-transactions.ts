@@ -17,6 +17,7 @@ export function useTransactions(filter: TransactionFilter) {
       dateTo: filter.dateTo,
       type: filter.type,
       categoryId: filter.categoryId,
+      accountId: filter.accountId,
     }),
     queryFn: () => transactionsRepo.getByFilter(filter),
     enabled: !!filter.userId,

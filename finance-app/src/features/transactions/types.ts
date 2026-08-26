@@ -10,4 +10,5 @@ export interface TransactionFilter {
   dateTo: Date
   type?: 'expense' | 'income'
   categoryId?: string
+  accountId?: string
 }

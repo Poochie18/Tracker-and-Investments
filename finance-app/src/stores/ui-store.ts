@@ -23,6 +23,11 @@ interface UIStore {
   activeTab: 'expense' | 'income'
   setActiveTab: (tab: 'expense' | 'income') => void
 
+  // Активний рахунок (перемикач на Огляді) — null означає "ще не вибрано",
+  // тоді компоненти самі фолбечать на перший активний рахунок користувача.
+  selectedAccountId: string | null
+  setSelectedAccountId: (id: string | null) => void
+
   isOnline: boolean
   setIsOnline: (val: boolean) => void
 }
@@ -43,6 +48,9 @@ export const useUIStore = create<UIStore>((set) => ({
 
   activeTab: 'expense',
   setActiveTab: (tab) => set({ activeTab: tab }),
+
+  selectedAccountId: null,
+  setSelectedAccountId: (id) => set({ selectedAccountId: id }),
 
   isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
   setIsOnline: (isOnline) => set({ isOnline }),
