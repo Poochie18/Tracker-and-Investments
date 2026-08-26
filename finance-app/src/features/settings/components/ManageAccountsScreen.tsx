@@ -5,6 +5,7 @@ import { ArrowLeft, Plus, Archive, RotateCcw, Landmark } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { accountsRepo } from '@/features/transactions/repositories/accounts-repo'
 import { SwipeToReveal } from '@/components/SwipeToReveal'
+import { useSyncContext } from '@/lib/sync/sync-context'
 import type { LocalAccount } from '@/lib/db/schema'
 
 // ── Хуки ──────────────────────────────────────────────────
@@ -24,6 +25,7 @@ function invalidateAccountQueries(queryClient: ReturnType<typeof useQueryClient>
 
 function useToggleArchive(userId: string) {
   const queryClient = useQueryClient()
+  const { triggerSync } = useSyncContext()
   return useMutation({
     mutationFn: async ({ id, isArchived }: { id: string; isArchived: boolean }) => {
       if (isArchived) {
@@ -32,7 +34,10 @@ function useToggleArchive(userId: string) {
         await accountsRepo.archive(userId, id)
       }
     },
-    onSuccess: () => invalidateAccountQueries(queryClient, userId),
+    onSuccess: () => {
+      invalidateAccountQueries(queryClient, userId)
+      triggerSync()
+    },
   })
 }
 
@@ -205,6 +210,7 @@ function CreateAccountSheet({
   onClose: () => void
 }) {
   const queryClient = useQueryClient()
+  const { triggerSync } = useSyncContext()
   const [name, setName] = useState(account?.name ?? '')
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -223,6 +229,7 @@ function CreateAccountSheet({
         await accountsRepo.create(userId, { name: name.trim() })
       }
       invalidateAccountQueries(queryClient, userId)
+      triggerSync()
       onClose()
     } catch {
       setError(account ? 'Не вдалось перейменувати рахунок' : 'Не вдалось створити рахунок')

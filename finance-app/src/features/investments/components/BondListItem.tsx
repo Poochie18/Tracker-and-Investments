@@ -10,6 +10,7 @@ import { useDeleteInvestment } from '@/hooks/use-investments'
 import { useExchangeRates } from '@/hooks/use-exchange-rates'
 import { CategoryIconCircle } from '@/features/transactions/components/CategoryIconCircle'
 import { Money } from '@/lib/utils/money'
+import { formatPercent } from '@/lib/utils/format'
 import { convertToUahMinorUnits } from '@/lib/investments/exchange-rate'
 import { computeBondTotals } from '../bond-schedule'
 import { BondPaymentSchedule } from './BondPaymentSchedule'
@@ -54,6 +55,7 @@ export function BondListItem({ investment }: BondListItemProps) {
   // тому єдиної "ціни за шт" більше нема (див. список партій нижче).
   const avgPricePerUnit = investment.quantity > 0 ? totalSpent / investment.quantity : 0
   const isProfit = totals.profit >= 0
+  const profitPercent = totals.invested === 0 ? 0 : (totals.profit / totals.invested) * 100
   // Сума прибутку завжди в гривнях (навіть якщо облігація в іншій валюті) —
   // щоб суми в списку були порівнювані між собою незалежно від валюти активу.
   const profitUah = rates ? convertToUahMinorUnits(totals.profit, investment.currency, rates) : null
@@ -103,11 +105,12 @@ export function BondListItem({ investment }: BondListItemProps) {
           <p className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>
             {fmt(totalSpent)}
           </p>
-          {profitUah != null && (
-            <p className="text-xs mt-0.5" style={{ color: isProfit ? 'var(--color-income)' : 'var(--color-expense)' }}>
-              {isProfit ? '+' : ''}{Money.fromKopiyky(profitUah).formatWhole('₴')}
-            </p>
-          )}
+          <p className="text-xs mt-0.5" style={{ color: isProfit ? 'var(--color-income)' : 'var(--color-expense)' }}>
+            {isProfit ? '+' : ''}{formatPercent(profitPercent, 1)}
+            {profitUah != null && (
+              <> ({isProfit ? '+' : ''}{Money.fromKopiyky(profitUah).formatWhole('₴')})</>
+            )}
+          </p>
         </div>
 
         {expanded ? (

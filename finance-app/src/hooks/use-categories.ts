@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { categoriesRepo } from '@/features/transactions/repositories/categories-repo'
 import type { TransactionType, LocalCategory } from '@/lib/db/schema'
+import { useSyncContext } from '@/lib/sync/sync-context'
 
 // Ключі для кешу TanStack Query.
 // Виносимо в одне місце щоб легко інвалідувати.
@@ -33,6 +34,7 @@ export function useCategoriesByType(userId: string | undefined, type: Transactio
 // Мутація для створення категорії
 export function useCreateCategory(userId: string) {
   const queryClient = useQueryClient()
+  const { triggerSync } = useSyncContext()
 
   return useMutation({
     mutationFn: (data: Pick<LocalCategory, 'name' | 'type' | 'icon_name' | 'color_hex'>) =>
@@ -40,6 +42,7 @@ export function useCreateCategory(userId: string) {
     // Після успіху — інвалідуємо кеш, UI перечитає дані
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: categoryKeys.all(userId) })
+      triggerSync()
     },
   })
 }
@@ -47,11 +50,13 @@ export function useCreateCategory(userId: string) {
 // Мутація для архівування
 export function useArchiveCategory(userId: string) {
   const queryClient = useQueryClient()
+  const { triggerSync } = useSyncContext()
 
   return useMutation({
     mutationFn: (id: string) => categoriesRepo.archive(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: categoryKeys.all(userId) })
+      triggerSync()
     },
   })
 }

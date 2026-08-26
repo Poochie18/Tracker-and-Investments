@@ -6,7 +6,11 @@ interface PortfolioSummaryCardProps {
   invested: Money
   currentValue: Money
   pnl: Money       // currentValue - invested
-  pnlPercent: number
+  // Не передавай на "Облігаціях" — там прибуток/збиток вже показано у
+  // відсотках на кожній окремій облігації (BondListItem), в агрегованій
+  // картці зверху це лише дублювало б і плутало (сумарний % по всіх
+  // облігаціях різних строків і валют не дуже інформативний сам по собі).
+  pnlPercent?: number
   // Гривневий еквівалент (за курсом НБУ) — показуємо поруч з основною
   // сумою, коли портфель ведеться в USD (крипта). Якщо не передано —
   // картка виглядає як раніше (лише основна валюта).
@@ -69,7 +73,9 @@ export function PortfolioSummaryCard({
         value={
           <>
             {sign}{pnl.formatCompact(currencySymbol)}
-            <span className="opacity-70"> {sign}{formatPercent(pnlPercent, 1)}</span>
+            {pnlPercent != null && (
+              <span className="opacity-70"> {sign}{formatPercent(pnlPercent, 1)}</span>
+            )}
           </>
         }
         secondary={uahEquivalent && `≈ ${sign}${uahEquivalent.pnl.formatWhole('₴')}`}

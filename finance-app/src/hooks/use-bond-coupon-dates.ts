@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { bondCouponDatesRepo } from '@/features/investments/repositories/bond-coupon-dates-repo'
+import { useSyncContext } from '@/lib/sync/sync-context'
 
 export const bondCouponDateKeys = {
   byInvestment: (investmentId: string) => ['bond-coupon-dates', investmentId] as const,
@@ -25,12 +26,14 @@ export function useAllBondCouponDates(userId: string | undefined) {
 
 export function useSetBondCouponDates(userId: string, investmentId: string) {
   const queryClient = useQueryClient()
+  const { triggerSync } = useSyncContext()
 
   return useMutation({
     mutationFn: (dates: string[]) => bondCouponDatesRepo.replaceAll(userId, investmentId, dates),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: bondCouponDateKeys.byInvestment(investmentId) })
       void queryClient.invalidateQueries({ queryKey: bondCouponDateKeys.all(userId) })
+      triggerSync()
     },
   })
 }

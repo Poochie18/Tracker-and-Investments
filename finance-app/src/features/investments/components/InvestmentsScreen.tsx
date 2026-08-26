@@ -190,7 +190,6 @@ export function InvestmentsScreen() {
               invested={invested}
               currentValue={currentValue}
               pnl={pnl}
-              pnlPercent={pnlPercent}
               stacked
               className="flex-1"
             />

@@ -3,6 +3,7 @@ import {
   portfolioSnapshotsRepo,
   type SavePortfolioSnapshotInput,
 } from '@/features/investments/repositories/portfolio-snapshots-repo'
+import { useSyncContext } from '@/lib/sync/sync-context'
 
 export const portfolioSnapshotKeys = {
   all: (userId: string) => ['portfolio-snapshots', userId] as const,
@@ -18,11 +19,13 @@ export function usePortfolioSnapshots(userId: string | undefined) {
 
 export function useSavePortfolioSnapshot(userId: string) {
   const queryClient = useQueryClient()
+  const { triggerSync } = useSyncContext()
 
   return useMutation({
     mutationFn: (input: SavePortfolioSnapshotInput) => portfolioSnapshotsRepo.save(userId, input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: portfolioSnapshotKeys.all(userId) })
+      triggerSync()
     },
   })
 }

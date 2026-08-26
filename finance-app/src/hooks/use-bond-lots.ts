@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { bondLotsRepo } from '@/features/investments/repositories/bond-lots-repo'
 import { investmentKeys } from './use-investments'
+import { useSyncContext } from '@/lib/sync/sync-context'
 
 export const bondLotKeys = {
   byInvestment: (investmentId: string) => ['bond-lots', investmentId] as const,
@@ -34,11 +35,13 @@ interface BondLotMutationInput {
 // перераховує його сам) — тому інвалідуємо і лоти, і інвестиції.
 function useInvalidateBondLots(userId: string, investmentId: string) {
   const queryClient = useQueryClient()
+  const { triggerSync } = useSyncContext()
   return () => {
     void queryClient.invalidateQueries({ queryKey: bondLotKeys.byInvestment(investmentId) })
     void queryClient.invalidateQueries({ queryKey: bondLotKeys.all(userId) })
     void queryClient.invalidateQueries({ queryKey: investmentKeys.all(userId) })
     void queryClient.invalidateQueries({ queryKey: ['investment', investmentId] })
+    triggerSync()
   }
 }
 

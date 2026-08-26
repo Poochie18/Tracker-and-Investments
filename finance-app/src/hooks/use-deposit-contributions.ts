@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { depositContributionsRepo } from '@/features/investments/repositories/deposit-contributions-repo'
+import { useSyncContext } from '@/lib/sync/sync-context'
 
 export const depositContributionKeys = {
   byInvestment: (investmentId: string) => ['deposit-contributions', investmentId] as const,
@@ -26,6 +27,7 @@ export function useAllDepositContributions(userId: string | undefined) {
 
 export function useSetDepositContribution(userId: string, investmentId: string) {
   const queryClient = useQueryClient()
+  const { triggerSync } = useSyncContext()
 
   return useMutation({
     mutationFn: ({ monthIndex, amount }: { monthIndex: number; amount: number }) =>
@@ -33,6 +35,8 @@ export function useSetDepositContribution(userId: string, investmentId: string) 
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: depositContributionKeys.byInvestment(investmentId) })
       void queryClient.invalidateQueries({ queryKey: depositContributionKeys.all(userId) })
+      // Пушимо одразу — не чекаємо 30с планового синку (див. use-investments.ts)
+      triggerSync()
     },
   })
 }

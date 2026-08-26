@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { transactionsRepo } from '@/features/transactions/repositories/transactions-repo'
 import type { TransactionFilter } from '@/features/transactions/types'
 import type { TransactionType } from '@/lib/db/schema'
+import { useSyncContext } from '@/lib/sync/sync-context'
 
 export const transactionKeys = {
   all: (userId: string) => ['transactions', userId] as const,
@@ -45,6 +46,7 @@ export function useTransactionSum(filter: TransactionFilter, type: TransactionTy
 // Мутація: створити транзакцію
 export function useCreateTransaction(userId: string) {
   const queryClient = useQueryClient()
+  const { triggerSync } = useSyncContext()
 
   return useMutation({
     mutationFn: (data: Parameters<typeof transactionsRepo.create>[1]) =>
@@ -52,6 +54,9 @@ export function useCreateTransaction(userId: string) {
     onSuccess: () => {
       // Інвалідуємо всі запити транзакцій — перечитуємо з Dexie
       void queryClient.invalidateQueries({ queryKey: transactionKeys.all(userId) })
+      // Пушимо одразу, не чекаючи 30с планового синку — інакше запис
+      // ризикує лишитись pending, якщо застосунок закриють раніше.
+      triggerSync()
     },
   })
 }
@@ -59,11 +64,13 @@ export function useCreateTransaction(userId: string) {
 // Мутація: видалити (soft delete)
 export function useDeleteTransaction(userId: string) {
   const queryClient = useQueryClient()
+  const { triggerSync } = useSyncContext()
 
   return useMutation({
     mutationFn: (id: string) => transactionsRepo.softDelete(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: transactionKeys.all(userId) })
+      triggerSync()
     },
   })
 }
@@ -71,6 +78,7 @@ export function useDeleteTransaction(userId: string) {
 // Мутація: редагувати
 export function useUpdateTransaction(userId: string) {
   const queryClient = useQueryClient()
+  const { triggerSync } = useSyncContext()
 
   return useMutation({
     mutationFn: ({
@@ -82,6 +90,7 @@ export function useUpdateTransaction(userId: string) {
     }) => transactionsRepo.update(id, data),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: transactionKeys.all(userId) })
+      triggerSync()
     },
   })
 }
