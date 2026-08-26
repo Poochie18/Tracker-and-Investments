@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { CheckCircle2, Loader2, WifiOff, AlertCircle, RefreshCw, CloudOff } from 'lucide-react'
 import { useSyncContext } from '@/lib/sync/sync-context'
 import { useAuth } from '@/hooks/use-auth'
+import { useSyncErrors } from '@/hooks/use-sync-errors'
 import { disableGuestMode, markPendingGuestMigration } from '@/lib/auth/local-mode'
 import type { SyncState } from '@/lib/sync/sync-engine'
 
@@ -10,10 +11,13 @@ import type { SyncState } from '@/lib/sync/sync-engine'
 // При тапі — показує деталі + кнопку повного оновлення (pull + push).
 export function SyncStatusIndicator() {
   const { syncState, manualSync } = useSyncContext()
-  const { isGuest } = useAuth()
+  const { user, isGuest } = useAuth()
   const navigate = useNavigate()
   const [showDetails, setShowDetails] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  // Тягнемо конкретні помилки лише коли дропдаун відкритий і є що показувати —
+  // "Помилка синхронізації" сама по собі не каже, що саме не збереглось.
+  const { data: syncErrors = [] } = useSyncErrors(user?.id, showDetails && syncState === 'error')
 
   const handleManualSync = async () => {
     setRefreshing(true)
@@ -54,6 +58,15 @@ export function SyncStatusIndicator() {
             <p className="text-xs mb-3" style={{ color: 'var(--color-text-secondary)' }}>
               {config.description}
             </p>
+            {syncState === 'error' && syncErrors.length > 0 && (
+              <div className="mb-3 flex flex-col gap-1 max-h-32 overflow-y-auto">
+                {syncErrors.map((e) => (
+                  <p key={`${e.table}-${e.id}`} className="text-[11px]" style={{ color: 'var(--color-expense)' }}>
+                    {e.table}: {e.message}
+                  </p>
+                ))}
+              </div>
+            )}
             {syncState === 'local-only' ? (
               <button
                 onClick={() => {
