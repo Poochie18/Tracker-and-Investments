@@ -61,7 +61,9 @@ export function SyncStatusIndicator() {
                   // через Google локальні дані лишаться "осиротілими".
                   markPendingGuestMigration()
                   disableGuestMode()
-                  window.location.href = '/login'
+                  // navigate(), не window.location.href — див. коментар у LoginScreen.tsx
+                  setShowDetails(false)
+                  navigate('/login')
                 } else {
                   setShowDetails(false)
                   navigate('/settings')
