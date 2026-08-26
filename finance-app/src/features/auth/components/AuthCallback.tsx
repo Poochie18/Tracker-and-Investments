@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { authClient } from '@/lib/auth/auth-client'
+import { disableGuestMode, isGuestMode, markPendingGuestMigration } from '@/lib/auth/local-mode'
 
 // AuthCallback — сторінка на яку Google повертає після авторизації.
 // URL виглядає як: /auth/callback?code=xxx
@@ -16,6 +17,15 @@ export function AuthCallback() {
       data: { subscription },
     } = authClient.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session) {
+        // Запобіжник: якщо прапорець "гість" лишився увімкненим (напр. після
+        // прямого входу через Google, минаючи кнопку "Створити акаунт" —
+        // або якщо він застряг через збій навігації) — реальна сесія вже є,
+        // тож знімаємо гостьовий режим і позначаємо гостьові дані на
+        // перенесення, щоб AuthGuard їх підхопив, а не залишив "осиротілими".
+        if (isGuestMode()) {
+          markPendingGuestMigration()
+          disableGuestMode()
+        }
         navigate('/overview', { replace: true })
       } else if (event === 'SIGNED_OUT') {
         navigate('/login', { replace: true })

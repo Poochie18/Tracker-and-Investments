@@ -1,10 +1,12 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Wallet } from 'lucide-react'
 import { authClient } from '@/lib/auth/auth-client'
 import { enableDevOfflineMode } from '@/lib/auth/dev-bypass'
 import { enableGuestMode } from '@/lib/auth/local-mode'
 
 export function LoginScreen() {
+  const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -80,7 +82,10 @@ export function LoginScreen() {
         <button
           onClick={() => {
             enableGuestMode()
-            window.location.href = '/overview'
+            // navigate(), не window.location.href — застосунок живе під
+            // base '/Tracker-and-Investments/' (GitHub Pages), абсолютний
+            // шлях '/overview' ігнорує цей префікс і веде на 404.
+            navigate('/overview')
           }}
           className="w-full py-2.5 rounded-xl text-sm font-medium mt-1 transition-opacity active:opacity-70"
           style={{ backgroundColor: 'transparent', color: 'var(--color-text-secondary)', textDecoration: 'underline' }}
@@ -95,7 +100,7 @@ export function LoginScreen() {
           <button
             onClick={() => {
               enableDevOfflineMode()
-              window.location.href = '/overview'
+              navigate('/overview')
             }}
             className="w-full py-2.5 rounded-xl text-sm font-medium mt-1"
             style={{ backgroundColor: 'var(--color-bg-header)', color: 'var(--color-text-secondary)' }}
