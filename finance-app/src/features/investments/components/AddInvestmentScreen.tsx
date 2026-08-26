@@ -177,8 +177,12 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType }: Inve
       // Повертаємось на вкладку саме цього типу активу — зберігає контекст,
       // якщо додавали/редагували, наприклад, з вкладки "Депозити".
       navigate(`/investments/type/${type}`)
-    } catch {
-      setError('Не вдалось зберегти. Спробуй ще раз.')
+    } catch (e) {
+      // Показуємо реальний текст помилки (Dexie constraint, quota тощо) —
+      // без цього незрозуміло, чи запис взагалі не створився локально,
+      // чи проблема лише в подальшій відправці в Supabase.
+      const message = e instanceof Error ? e.message : String(e)
+      setError(`Не вдалось зберегти: ${message}`)
     }
   }
 
