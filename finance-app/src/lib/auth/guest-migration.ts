@@ -19,10 +19,16 @@ async function migrateTable<T extends { id: string; user_id: string; _sync_statu
   const rows = await table.where('user_id').equals(guestId).toArray()
   if (rows.length === 0) return
 
+  // bulkPut оновлює записи ЗА ТИМ САМИМ id (тільки user_id міняється) —
+  // це вже й є "перенесення", нового id не з'являється. bulkDelete(rows
+  // .map(r => r.id)) тут раніше видаляв ті ж самі id одразу після
+  // bulkPut — тобто стирав щойно перенесені записи (акаунти, категорії,
+  // транзакції, депозити — усе) ще до першого sync-циклу. Саме тому
+  // гостьові дані (напр. депозит, створений як гість) зникали і ніколи
+  // не потрапляли в Supabase.
   await table.bulkPut(
     rows.map((r) => ({ ...r, user_id: realUserId, _sync_status: 'pending', _local_updated_at: now }))
   )
-  await table.bulkDelete(rows.map((r) => r.id) as never)
 }
 
 export async function migrateGuestDataToAccount(guestId: string, realUserId: string): Promise<void> {
