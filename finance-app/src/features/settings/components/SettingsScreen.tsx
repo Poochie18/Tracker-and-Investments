@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { ChevronRight, Tag, Archive, LogOut, Info, Wrench, Trash2, UploadCloud, KeyRound } from 'lucide-react'
+import { ChevronRight, Tag, Landmark, Archive, LogOut, Info, Wrench, Trash2, UploadCloud, KeyRound, Cloud, UserPlus } from 'lucide-react'
 import { CryptoApiKeysModal } from './CryptoApiKeysModal'
 import { useAuth } from '@/hooks/use-auth'
 import { useQueryClient } from '@tanstack/react-query'
@@ -13,11 +13,15 @@ import {
 import { transactionKeys } from '@/hooks/use-transactions'
 import { investmentKeys } from '@/hooks/use-investments'
 import { MONTH_NAMES_UK, useFiscalYearStartMonth, setFiscalYearStartMonth } from '@/lib/settings/fiscal-year'
+import { useSyncContext } from '@/lib/sync/sync-context'
+import { authClient } from '@/lib/auth/auth-client'
+import { disableGuestMode, markPendingGuestMigration } from '@/lib/auth/local-mode'
 
 export function SettingsScreen() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
-  const { user, signOut } = useAuth()
+  const { user, isGuest, signOut } = useAuth()
+  const { storageMode, setStorageMode } = useSyncContext()
   const queryClient = useQueryClient()
   const [signingOut, setSigningOut] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
@@ -171,6 +175,17 @@ export function SettingsScreen() {
     }
   }
 
+  const handleCreateAccount = async () => {
+    // Позначаємо (окремим ключем, не залежним від guest-mode прапорця),
+    // що після повернення з Google треба перенести гостьові дані на
+    // реальний акаунт (обробляється в AuthGuard) — і одразу вимикаємо
+    // guest-mode, інакше useAuth() продовжить віддавати гостьового
+    // користувача навіть після успішного входу через Google.
+    markPendingGuestMigration()
+    disableGuestMode()
+    await authClient.signInWithGoogle()
+  }
+
   const handleSignOut = async () => {
     setSigningOut(true)
     try {
@@ -235,10 +250,61 @@ export function SettingsScreen() {
           onPress={() => setShowCryptoKeys(true)}
         />
 
+        {/* ── Секція: зберігання даних ─────────────────────── */}
+        <p className="text-xs font-medium px-1 mt-4 mb-1" style={{ color: 'var(--color-text-secondary)' }}>
+          Зберігання даних
+        </p>
+
+        {isGuest ? (
+          <SettingsItem
+            icon={<UserPlus size={18} />}
+            label="Створити акаунт і синхронізувати"
+            description="Перенести дані з цього пристрою в хмару"
+            onPress={handleCreateAccount}
+          />
+        ) : (
+          <div
+            className="flex items-center gap-3 px-4 py-3 rounded-2xl w-full"
+            style={{ backgroundColor: 'var(--color-bg-card)' }}
+          >
+            <Cloud size={18} style={{ color: 'var(--color-text-secondary)' }} />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
+                Синхронізація в хмару
+              </p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>
+                {storageMode === 'cloud'
+                  ? 'Дані синхронізуються між пристроями'
+                  : 'Дані лише на цьому пристрої'}
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={storageMode === 'cloud'}
+              onClick={() => setStorageMode(storageMode === 'cloud' ? 'local' : 'cloud')}
+              className="relative w-11 h-6 rounded-full transition-colors shrink-0"
+              style={{ backgroundColor: storageMode === 'cloud' ? 'var(--color-accent)' : 'var(--color-bg-header)' }}
+            >
+              <span
+                className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform"
+                style={{ transform: storageMode === 'cloud' ? 'translateX(20px)' : 'translateX(0)' }}
+              />
+            </button>
+          </div>
+        )}
+
         {/* ── Секція: дані ────────────────────────────────── */}
-        <p className="text-xs font-medium px-1 mb-1" style={{ color: 'var(--color-text-secondary)' }}>
+        <p className="text-xs font-medium px-1 mt-4 mb-1" style={{ color: 'var(--color-text-secondary)' }}>
           Дані
         </p>
+
+        <SettingsItem
+          icon={<Landmark size={18} />}
+          label="Рахунки"
+          description="Головний, робочий та інші рахунки"
+          onPress={() => navigate('/settings/accounts')}
+        />
 
         <SettingsItem
           icon={<Tag size={18} />}
@@ -419,7 +485,7 @@ export function SettingsScreen() {
 
         <SettingsItem
           icon={<LogOut size={18} />}
-          label="Вийти з акаунту"
+          label={isGuest ? 'Вийти з гостьового режиму' : 'Вийти з акаунту'}
           onPress={() => setShowConfirm(true)}
           danger
         />
@@ -456,10 +522,12 @@ export function SettingsScreen() {
             style={{ backgroundColor: 'var(--color-bg-card)' }}
           >
             <p className="text-base font-semibold text-center" style={{ color: 'var(--color-text-primary)' }}>
-              Вийти з акаунту?
+              {isGuest ? 'Вийти з гостьового режиму?' : 'Вийти з акаунту?'}
             </p>
             <p className="text-sm text-center" style={{ color: 'var(--color-text-secondary)' }}>
-              Локальні дані залишаться на пристрої. При наступному вході вони синхронізуються знову.
+              {isGuest
+                ? 'Локальні дані залишаться на цьому пристрої — при повторному вході як гість вони будуть на місці.'
+                : 'Локальні дані залишаться на пристрої. При наступному вході вони синхронізуються знову.'}
             </p>
             <button
               onClick={handleSignOut}

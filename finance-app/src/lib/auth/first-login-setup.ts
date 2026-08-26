@@ -2,7 +2,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { supabase } from '@/lib/supabase'
 import { db } from '@/lib/db'
 import { ALL_DEFAULT_CATEGORIES } from '@/lib/db/seed'
-import { isDevOfflineMode } from '@/lib/auth/dev-bypass'
+import { isLocalOnly } from '@/lib/auth/local-mode'
 import type { LocalAccount, LocalCategory } from '@/lib/db/schema'
 
 // Видаляє дублікати категорій, залишаючи по одному запису на (name+type).
@@ -38,9 +38,9 @@ export async function deduplicateCategories(userId: string): Promise<number> {
           _local_updated_at: Date.now(),
         })
       }
-      // Видаляємо з Dexie і Supabase (в dev офлайн-режимі — тільки локально)
+      // Видаляємо з Dexie і Supabase (у локальному режимі — тільки локально)
       await db.categories.delete(del.id)
-      if (!isDevOfflineMode()) {
+      if (!isLocalOnly(userId)) {
         await supabase.from('categories').delete().eq('id', del.id)
       }
       removed++
@@ -51,8 +51,9 @@ export async function deduplicateCategories(userId: string): Promise<number> {
 }
 
 export async function isFirstLogin(userId: string): Promise<boolean> {
-  // Dev офлайн-режим — перевіряємо тільки локальну Dexie, без Supabase.
-  if (isDevOfflineMode()) {
+  // Локальний режим (dev офлайн / гість / світч "локально") — перевіряємо
+  // тільки локальну Dexie, без Supabase.
+  if (isLocalOnly(userId)) {
     const localCount = await db.accounts.where('user_id').equals(userId).count()
     return localCount === 0
   }
@@ -71,11 +72,11 @@ export async function isFirstLogin(userId: string): Promise<boolean> {
 // а потім одразу зберігаємо їх у Dexie зі статусом 'synced'.
 // Це критично — без Dexie запису UI не побачить жодних даних.
 //
-// В dev офлайн-режимі Supabase-виклики пропускаються, а записи
-// одразу створюються локально зі статусом 'pending' — вони підуть
-// на сервер, коли синк-двигун знову ввімкнеться.
+// У локальному режимі (dev офлайн / гість / світч "локально") Supabase-виклики
+// пропускаються, а записи одразу створюються локально зі статусом 'pending' —
+// вони підуть на сервер, коли синк-двигун знову ввімкнеться.
 export async function setupFirstLogin(userId: string): Promise<void> {
-  const offline = isDevOfflineMode()
+  const offline = isLocalOnly(userId)
 
   // Другий захист: якщо категорії вже є в Supabase — хтось встиг створити їх раніше
   if (!offline) {

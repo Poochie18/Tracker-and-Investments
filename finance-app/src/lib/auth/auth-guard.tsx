@@ -4,6 +4,8 @@ import { Loader2 } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { SyncProvider } from '@/lib/sync/sync-context'
 import { isFirstLogin, setupFirstLogin } from './first-login-setup'
+import { clearPendingGuestMigration, getPendingGuestMigrationId, isGuestMode } from './local-mode'
+import { migrateGuestDataToAccount } from './guest-migration'
 
 export function AuthGuard() {
   const { user, loading } = useAuth()
@@ -15,6 +17,25 @@ export function AuthGuard() {
   useEffect(() => {
     if (!user || setupStarted.current) return
     setupStarted.current = true
+
+    const pendingGuestId = getPendingGuestMigrationId()
+
+    // Гість щойно ввійшов через Google — переносимо його локальні дані
+    // на реальний акаунт замість звичайного first-login сетапу
+    // (інакше isFirstLogin/setupFirstLogin створили б ще один порожній
+    // дефолтний рахунок і категорії поверх щойно перенесених).
+    if (pendingGuestId && !isGuestMode() && user.id !== pendingGuestId) {
+      migrateGuestDataToAccount(pendingGuestId, user.id)
+        .then(() => {
+          clearPendingGuestMigration()
+          setSetupDone(true)
+        })
+        .catch((err: unknown) => {
+          setupStarted.current = false
+          setSetupError(err instanceof Error ? err.message : 'Помилка перенесення гостьових даних')
+        })
+      return
+    }
 
     isFirstLogin(user.id)
       .then(async (needsSetup) => {

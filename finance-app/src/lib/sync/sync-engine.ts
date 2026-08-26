@@ -5,7 +5,7 @@ import { db } from '@/lib/db'
 import { onlineDetector } from './online-detector'
 import { flushSyncQueue, hasPendingRecords } from './sync-queue'
 import { resolveConflict } from './conflict-resolver'
-import { isDevOfflineMode } from '@/lib/auth/dev-bypass'
+import { isLocalOnly } from '@/lib/auth/local-mode'
 import type {
   LocalTransaction, LocalCategory, LocalAccount, LocalInvestment, LocalDepositContribution,
   LocalBondCouponDate, LocalBondLot, LocalPortfolioSnapshot,
@@ -22,11 +22,12 @@ import type {
 // ============================================================
 
 export type SyncState =
-  | 'idle'       // все синхронізовано
-  | 'syncing'    // синхронізація в процесі
-  | 'pending'    // є pending записи, чекаємо мережі або тригеру
-  | 'error'      // є помилки синхронізації
-  | 'offline'    // пристрій офлайн
+  | 'idle'        // все синхронізовано
+  | 'syncing'     // синхронізація в процесі
+  | 'pending'     // є pending записи, чекаємо мережі або тригеру
+  | 'error'       // є помилки синхронізації
+  | 'offline'     // пристрій офлайн
+  | 'local-only'  // гість або світч "локально" — Supabase не використовується
 
 interface SyncEngineOptions {
   userId: string
@@ -55,10 +56,10 @@ export class SyncEngine {
   // ── Старт ────────────────────────────────────────────────
 
   async start(): Promise<void> {
-    // Dev офлайн-режим — не звертаємось до Supabase взагалі,
-    // працюємо тільки з Dexie. UI показує стан 'idle', ніби все синхронізовано.
-    if (isDevOfflineMode()) {
-      this.onStateChange('idle')
+    // Локальний режим (dev офлайн / гість / світч "локально") — не
+    // звертаємось до Supabase взагалі, працюємо тільки з Dexie.
+    if (isLocalOnly(this.userId)) {
+      this.onStateChange('local-only')
       return
     }
 
@@ -106,7 +107,10 @@ export class SyncEngine {
 
   // Публічний метод — викликається після кожного локального запису
   async triggerSync(): Promise<void> {
-    if (isDevOfflineMode()) return
+    if (isLocalOnly(this.userId)) {
+      this.onStateChange('local-only')
+      return
+    }
     if (onlineDetector.isOnline) {
       await this.sync()
     } else {
@@ -122,7 +126,10 @@ export class SyncEngine {
   // пропускається, якщо на пристрої вже є хоч якісь локальні дані —
   // тож новий пристрій міг ніколи не отримати щось, додане на іншому.
   async manualSync(): Promise<void> {
-    if (isDevOfflineMode()) return
+    if (isLocalOnly(this.userId)) {
+      this.onStateChange('local-only')
+      return
+    }
     if (!onlineDetector.isOnline) {
       this.onStateChange('offline')
       return

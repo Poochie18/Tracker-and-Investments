@@ -2,10 +2,12 @@ import { useEffect, useState, useCallback } from 'react'
 import type { User } from '@supabase/supabase-js'
 import { authClient } from '@/lib/auth/auth-client'
 import { DEV_USER, disableDevOfflineMode, isDevOfflineMode } from '@/lib/auth/dev-bypass'
+import { disableGuestMode, getOrCreateGuestId, isGuestMode } from '@/lib/auth/local-mode'
 
 export interface UseAuthReturn {
   user: User | null
   loading: boolean  // true поки Supabase перевіряє збережену сесію
+  isGuest: boolean
   signOut: () => Promise<void>
 }
 
@@ -19,6 +21,13 @@ export function useAuth(): UseAuthReturn {
     // Dev офлайн-режим — не звертаємось до Supabase взагалі.
     if (isDevOfflineMode()) {
       setUser(DEV_USER)
+      setLoading(false)
+      return
+    }
+
+    // Гостьовий режим — так само не звертаємось до Supabase, працює і в проді.
+    if (isGuestMode()) {
+      setUser({ id: getOrCreateGuestId(), email: null } as unknown as User)
       setLoading(false)
       return
     }
@@ -47,8 +56,13 @@ export function useAuth(): UseAuthReturn {
       window.location.reload()
       return
     }
+    if (isGuestMode()) {
+      disableGuestMode()
+      window.location.reload()
+      return
+    }
     await authClient.signOut()
   }, [])
 
-  return { user, loading, signOut }
+  return { user, loading, isGuest: isGuestMode(), signOut }
 }
