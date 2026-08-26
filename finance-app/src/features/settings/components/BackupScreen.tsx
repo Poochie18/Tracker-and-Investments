@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Download, Upload, CheckCircle2, AlertCircle } from 'lucide-react'
+import { ArrowLeft, Download, Upload, CheckCircle2, AlertCircle, FileSpreadsheet } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { downloadBackup, importBackup, type ImportMode } from '../services/backup-service'
 import { useQueryClient } from '@tanstack/react-query'
@@ -136,6 +136,29 @@ export function BackupScreen() {
           >
             <Download size={16} />
             {exporting ? 'Експортуємо...' : 'Завантажити файл'}
+          </button>
+        </div>
+
+        {/* ── Імпорт з Excel (з іншого застосунку) ───────────── */}
+        <div
+          className="rounded-2xl p-4 flex flex-col gap-3"
+          style={{ backgroundColor: 'var(--color-bg-card)' }}
+        >
+          <div>
+            <p className="font-medium text-sm" style={{ color: 'var(--color-text-primary)' }}>
+              Імпорт з Excel
+            </p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>
+              Перенести транзакції з експорту іншого застосунку обліку фінансів
+            </p>
+          </div>
+          <button
+            onClick={() => navigate('/settings/backup/import-excel')}
+            className="flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-opacity"
+            style={{ backgroundColor: 'rgba(255,255,255,0.08)', color: 'var(--color-text-primary)' }}
+          >
+            <FileSpreadsheet size={16} />
+            Обрати файл(и) .xlsx
           </button>
         </div>
 
