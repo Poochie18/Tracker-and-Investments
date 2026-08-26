@@ -52,6 +52,21 @@ export function SettingsScreen() {
   const [importMsg, setImportMsg] = useState<string | null>(null)
   const fiscalYearStartMonth = useFiscalYearStartMonth()
 
+  // Ім'я користувача з Google-профілю (user_metadata приходить з Google OAuth:
+  // full_name/name — повне ім'я, given_name — тільки ім'я). Беремо перше
+  // слово повного імені як фолбек, якщо given_name відсутній.
+  const userFirstName = (() => {
+    const meta = user?.user_metadata as Record<string, unknown> | undefined
+    const givenName = typeof meta?.given_name === 'string' ? meta.given_name : null
+    if (givenName) return givenName
+    const fullName =
+      (typeof meta?.full_name === 'string' && meta.full_name) ||
+      (typeof meta?.name === 'string' && meta.name) ||
+      null
+    if (fullName) return fullName.split(' ')[0]
+    return user?.email ?? null
+  })()
+
   const handleDedup = async () => {
     if (!user) return
     setDeduping(true)
@@ -212,6 +227,9 @@ export function SettingsScreen() {
         <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text-primary)' }}>
           Налаштування
         </h1>
+        <p className="text-sm mt-1" style={{ color: 'var(--color-text-secondary)' }}>
+          Вітаємо, {isGuest ? 'гість' : (userFirstName ?? 'користувач')}
+        </p>
       </div>
 
       <div className="flex flex-col gap-2 p-4">

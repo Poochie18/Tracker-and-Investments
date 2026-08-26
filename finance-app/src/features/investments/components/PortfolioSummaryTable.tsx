@@ -44,7 +44,6 @@ export function PortfolioSummaryTable({ summary, displayCurrency, rates }: Portf
               <Th>Вкладено</Th>
               <Th>Вартість</Th>
               <Th>Дохід</Th>
-              <Th>Частка</Th>
             </tr>
           </thead>
           <tbody>
@@ -62,7 +61,6 @@ export function PortfolioSummaryTable({ summary, displayCurrency, rates }: Portf
                 <Td>{fmt(row.invested)}</Td>
                 <Td>{fmt(row.currentValue)}</Td>
                 {pnlCell(row.pnl, row.pnlPercent)}
-                <Td>{formatPercent(row.portfolioPercent, 1)}</Td>
               </tr>
             ))}
           </tbody>
@@ -74,7 +72,6 @@ export function PortfolioSummaryTable({ summary, displayCurrency, rates }: Portf
               <Td bold>{fmt(summary.totalInvested)}</Td>
               <Td bold>{fmt(summary.totalCurrentValue)}</Td>
               {pnlCell(summary.totalPnl, summary.totalPnlPercent)}
-              <Td bold>100%</Td>
             </tr>
           </tfoot>
         </table>

@@ -73,9 +73,14 @@ export class SyncEngine {
       }
     })
 
-    // Першочерговий pull при старті (якщо онлайн)
+    // Повний pull при кожному старті (вході в застосунок), якщо онлайн —
+    // без гварду "тільки якщо Dexie порожня" (той залишав пристрої з уже
+    // наявними локальними даними без свіжих змін з інших пристроїв аж до
+    // ручного "Синхронізувати зараз" або спрацювання realtime).
     if (onlineDetector.isOnline) {
-      await this.initialPull()
+      this.onStateChange('syncing')
+      await this.pullAll()
+      this.invalidateQueries()
       await this.sync()
     } else {
       this.onStateChange('offline')
@@ -120,11 +125,9 @@ export class SyncEngine {
 
   // Публічний метод для кнопки "Синхронізувати зараз" — на відміну від
   // triggerSync() (тільки push pending-записів), робить повний PULL
-  // з Supabase (як initialPull, але без гварду "тільки якщо Dexie порожня")
-  // + після цього push. Потрібен, бо: 1) Realtime може бути не увімкнено
-  // для якоїсь таблиці (postgres_changes мовчить), 2) initialPull
-  // пропускається, якщо на пристрої вже є хоч якісь локальні дані —
-  // тож новий пристрій міг ніколи не отримати щось, додане на іншому.
+  // з Supabase + після цього push. Потрібен для ручного оновлення поза
+  // автоматичним pull-ом на старті (напр. якщо застосунок довго не
+  // перезавантажувався, а дані на іншому пристрої вже змінились).
   async manualSync(): Promise<void> {
     if (isLocalOnly(this.userId)) {
       this.onStateChange('local-only')
@@ -185,34 +188,9 @@ export class SyncEngine {
     }
   }
 
-  // ── Initial Pull (при першому підключенні) ────────────────
-  //
-  // Завантажуємо всі дані з Supabase і зберігаємо в Dexie.
-  // Потрібно якщо юзер увійшов на новому пристрої де Dexie порожня.
-
-  async initialPull(): Promise<void> {
-    // Якщо Dexie вже має дані цього юзера — пропускаємо initial pull.
-    // УВАГА: це грубий гвард лише по transactions/accounts — якщо на
-    // пристрої вже є будь-які локальні дані (напр. з попереднього тесту),
-    // pull повністю пропускається, і інвестиції/крипта з іншого пристрою
-    // сюди могли ніколи не потрапити. Для гарантованого підвантаження
-    // всього — manualSync() (кнопка "Синхронізувати зараз"), який пуляє
-    // pullAll() завжди, без цього гварду.
-    const localCount = await db.transactions
-      .where('user_id').equals(this.userId).count()
-
-    // Рахунок вже має бути з setupFirstLogin, тому перевіряємо transactions
-    // (можуть бути відсутніми на новому пристрої)
-    const hasAccounts = (await db.accounts.where('user_id').equals(this.userId).count()) > 0
-    if (hasAccounts && localCount > 0) return
-
-    this.onStateChange('syncing')
-    await this.pullAll()
-    this.invalidateQueries()
-  }
-
   // Повний pull усіх таблиць з Supabase у Dexie — без гварду. Викликається
-  // і з initialPull (після перевірки), і напряму з manualSync().
+  // і при кожному старті (start(), тобто вхід у застосунок), і напряму
+  // з manualSync() (кнопка "Синхронізувати зараз").
   private async pullAll(): Promise<void> {
     await Promise.all([
       this.pullAccounts(),
@@ -435,6 +413,18 @@ export class SyncEngine {
         },
         (payload) => void this.handleInvestmentChange(payload)
       )
+      // Підписуємось на зміни поповнень депозитів (напр. додано на іншому
+      // пристрої) — без цього вони підтягувались лише через manualSync().
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'deposit_contributions',
+          filter: `user_id=eq.${this.userId}`,
+        },
+        (payload) => void this.handleDepositContributionChange(payload)
+      )
       .subscribe()
   }
 
@@ -503,6 +493,30 @@ export class SyncEngine {
     }
 
     await db.investments.put({
+      ...remoteData,
+      _sync_status: 'synced',
+      _sync_error: null,
+      _local_updated_at: Date.now(),
+    })
+
+    this.invalidateQueries()
+  }
+
+  private async handleDepositContributionChange(
+    payload: { eventType: string; new: Record<string, unknown> }
+  ): Promise<void> {
+    const { eventType, new: newRecord } = payload
+    if (eventType === 'DELETE') return
+
+    const remoteData = newRecord as unknown as LocalDepositContribution
+    const localRecord = await db.depositContributions.get(remoteData.id)
+
+    if (localRecord && localRecord._sync_status === 'pending') {
+      const winner = resolveConflict(localRecord, remoteData)
+      if (winner === 'local') return
+    }
+
+    await db.depositContributions.put({
       ...remoteData,
       _sync_status: 'synced',
       _sync_error: null,

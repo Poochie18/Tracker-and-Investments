@@ -39,7 +39,7 @@ export function SyncProvider({ userId, children }: SyncProviderProps) {
   // storageMode у залежностях — при зміні світча старий engine зупиняється
   // (cleanup) і створюється новий; новий start() сам побачить оновлений
   // localStorage через isLocalOnly() і або мовчить, або підхоплює
-  // пропущені зміни (initialPull + push), якщо хмару знову увімкнули.
+  // пропущені зміни (повний pull + push), якщо хмару знову увімкнули.
   useEffect(() => {
     const engine = new SyncEngine({
       userId,
