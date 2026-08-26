@@ -35,6 +35,10 @@ export function getPeriodRange(
     case 'custom':
       if (custom) return { from: startOfDay(custom.from), to: endOfDay(custom.to) }
       return { from: startOfMonth(anchor), to: endOfMonth(anchor) }
+    case 'all':
+      // "Весь час" — беремо максимально широкий діапазон, щоб охопити
+      // будь-яку транзакцію незалежно від дати.
+      return { from: new Date(1970, 0, 1), to: endOfDay(new Date(2100, 0, 1)) }
     default:
       return { from: startOfMonth(anchor), to: endOfMonth(anchor) }
   }
@@ -69,6 +73,8 @@ export function formatPeriodHeader(
       if (custom)
         return `${format(custom.from, 'd MMM', { locale: uk })} — ${format(custom.to, 'd MMM', { locale: uk })}`
       return format(anchor, 'LLLL yyyy', { locale: uk })
+    case 'all':
+      return 'Весь час'
     default:
       return format(anchor, 'LLLL yyyy', { locale: uk })
   }

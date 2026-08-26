@@ -17,10 +17,10 @@ const WING_WIDTH = 56
 
 // Стрілки "‹ попередній / наступний ›" навколо заголовку періоду
 // + скромна кнопка "»" (перестрибнути на сьогодні), коли відійшли
-// від поточного періоду. Для 'custom' (довільний діапазон) навігація
-// не має сенсу — рендеримо просто заголовок.
+// від поточного періоду. Для 'custom' (довільний діапазон) і 'all'
+// (весь час) навігація не має сенсу — рендеримо просто заголовок.
 export function PeriodNavigator({ period, anchor, label, onAnchorChange }: PeriodNavigatorProps) {
-  if (period === 'custom') {
+  if (period === 'custom' || period === 'all') {
     return (
       <p className="text-sm font-medium text-center" style={{ color: 'rgba(255,255,255,0.6)' }}>
         {label}

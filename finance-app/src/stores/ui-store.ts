@@ -3,7 +3,7 @@ import { create } from 'zustand'
 // Zustand store для UI стану, що не є даними з сервера.
 // Серверні дані (транзакції, категорії) — через TanStack Query.
 
-export type PeriodType = 'day' | 'week' | 'month' | 'year' | 'custom'
+export type PeriodType = 'day' | 'week' | 'month' | 'year' | 'custom' | 'all'
 
 interface UIStore {
   selectedPeriod: PeriodType

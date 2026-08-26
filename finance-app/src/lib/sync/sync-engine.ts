@@ -435,6 +435,18 @@ export class SyncEngine {
         },
         (payload) => void this.handleInvestmentChange(payload)
       )
+      // Підписуємось на зміни поповнень депозитів (напр. додано на іншому
+      // пристрої) — без цього вони підтягувались лише через manualSync().
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'deposit_contributions',
+          filter: `user_id=eq.${this.userId}`,
+        },
+        (payload) => void this.handleDepositContributionChange(payload)
+      )
       .subscribe()
   }
 
@@ -503,6 +515,30 @@ export class SyncEngine {
     }
 
     await db.investments.put({
+      ...remoteData,
+      _sync_status: 'synced',
+      _sync_error: null,
+      _local_updated_at: Date.now(),
+    })
+
+    this.invalidateQueries()
+  }
+
+  private async handleDepositContributionChange(
+    payload: { eventType: string; new: Record<string, unknown> }
+  ): Promise<void> {
+    const { eventType, new: newRecord } = payload
+    if (eventType === 'DELETE') return
+
+    const remoteData = newRecord as unknown as LocalDepositContribution
+    const localRecord = await db.depositContributions.get(remoteData.id)
+
+    if (localRecord && localRecord._sync_status === 'pending') {
+      const winner = resolveConflict(localRecord, remoteData)
+      if (winner === 'local') return
+    }
+
+    await db.depositContributions.put({
       ...remoteData,
       _sync_status: 'synced',
       _sync_error: null,

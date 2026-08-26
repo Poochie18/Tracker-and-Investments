@@ -101,10 +101,10 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType }: Inve
 
   const isSaving = createInvestment.isPending || updateInvestment.isPending
   const isBond = type === 'bond'
-  // Облігація, що вже редагується, — "Кількість"/"Ціна купівлі"/"Дата
-  // купівлі" похідні від партій (bond_lots), керуються окремо через
-  // BondListItem → "Докупити"/тап на партію, тут заблоковані.
-  const bondFieldsLocked = isBond && isEdit
+  // "Кількість"/"Ціна купівлі"/"Дата купівлі" для облігацій, що
+  // редагуються, теж доступні для правки напряму — окремо від партій
+  // (bond_lots), керованих через BondListItem → "Докупити"/тап на партію.
+  const bondFieldsLocked = false
 
   const addCouponDate = () => setCouponDates_((prev) => [...prev, new Date().toISOString().slice(0, 10)])
   const updateCouponDate = (index: number, value: string) =>

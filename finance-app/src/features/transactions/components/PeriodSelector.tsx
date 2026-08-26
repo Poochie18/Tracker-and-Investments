@@ -78,6 +78,19 @@ export function PeriodSelector({ active, onChange }: PeriodSelectorProps) {
         </button>
       </div>
 
+      <label className="flex items-center gap-2 px-1 py-0.5 text-xs cursor-pointer select-none w-fit">
+        <input
+          type="checkbox"
+          checked={active === 'all'}
+          onChange={(e) => {
+            setShowCustom(false)
+            onChange(e.target.checked ? 'all' : 'month')
+          }}
+          className="w-3.5 h-3.5 rounded accent-[var(--color-accent)]"
+        />
+        <span style={{ color: 'var(--color-text-secondary)' }}>Весь час</span>
+      </label>
+
       {/* Кастомний діапазон дат */}
       {showCustom && (
         <div
