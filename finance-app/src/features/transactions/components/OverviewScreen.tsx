@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/use-auth'
-import { useAccount } from '@/hooks/use-account'
+import { useAccounts } from '@/hooks/use-accounts'
 import { useTransactions } from '@/hooks/use-transactions'
 import { useCategories } from '@/hooks/use-categories'
 import { useUIStore } from '@/stores/ui-store'
@@ -15,12 +15,16 @@ import { DonutChart } from './DonutChart'
 import { CategoryListItem } from './CategoryListItem'
 import { SyncStatusIndicator } from '@/components/SyncStatusIndicator'
 import { AccountIconButton } from '@/components/AccountIconButton'
+import { AccountSwitcher } from '@/components/AccountSwitcher'
 import type { LocalCategory } from '@/lib/db/schema'
 
 export function OverviewScreen() {
   const navigate = useNavigate()
   const { user } = useAuth()
-  void useAccount(user?.id)
+  const { data: accounts = [] } = useAccounts(user?.id)
+  const selectedAccountId = useUIStore((s) => s.selectedAccountId)
+  const setSelectedAccountId = useUIStore((s) => s.setSelectedAccountId)
+  const activeAccountId = accounts.find((a) => a.id === selectedAccountId)?.id ?? accounts[0]?.id
   const activeTab = useUIStore((s) => s.activeTab)
   const setActiveTab = useUIStore((s) => s.setActiveTab)
   const selectedPeriod = useUIStore((s) => s.selectedPeriod)
@@ -44,6 +48,7 @@ export function OverviewScreen() {
     userId: user?.id ?? '',
     dateFrom: from,
     dateTo: to,
+    accountId: activeAccountId,
   })
 
   const { data: categories = [] } = useCategories(user?.id)
@@ -125,7 +130,12 @@ export function OverviewScreen() {
 
         {/* Різниця доходів і витрат по центру */}
         <div className="flex flex-col items-center mb-4">
-          <p className="text-xs mb-0.5" style={{ color: 'rgba(255,255,255,0.5)' }}>
+          <AccountSwitcher
+            accounts={accounts}
+            activeAccountId={activeAccountId}
+            onSelect={setSelectedAccountId}
+          />
+          <p className="text-xs mb-0.5 mt-1" style={{ color: 'rgba(255,255,255,0.5)' }}>
             Баланс за період
           </p>
           <p className="text-4xl font-bold" style={{ color: netColor }}>

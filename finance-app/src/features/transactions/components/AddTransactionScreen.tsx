@@ -2,9 +2,10 @@ import { useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Check, Calculator, ChevronDown, ChevronUp } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
-import { useAccount } from '@/hooks/use-account'
+import { useAccounts } from '@/hooks/use-accounts'
 import { useCategoriesByType } from '@/hooks/use-categories'
 import { useCreateTransaction, useUpdateTransaction, useTransaction } from '@/hooks/use-transactions'
+import { useUIStore } from '@/stores/ui-store'
 import { CategoryIconCircle } from './CategoryIconCircle'
 import { ExpenseIncomeTabs } from './ExpenseIncomeTabs'
 import { QuickDateSelector } from './QuickDateSelector'
@@ -51,12 +52,19 @@ function TransactionForm({ id, existing }: TransactionFormProps) {
   const navigate = useNavigate()
   const isEdit = !!id
   const { user } = useAuth()
-  const { data: account } = useAccount(user?.id)
+  const { data: accounts = [] } = useAccounts(user?.id)
+  const globalSelectedAccountId = useUIStore((s) => s.selectedAccountId)
   const createTransaction = useCreateTransaction(user?.id ?? '')
   const updateTransaction = useUpdateTransaction(user?.id ?? '')
   const inputRef = useRef<HTMLInputElement>(null)
 
   const [type, setType] = useState<TransactionType>(existing?.type ?? 'expense')
+  // undefined, поки користувач не тапнув інший рахунок вручну — тоді
+  // діючий рахунок обчислюється нижче з живих даних (accounts може
+  // довантажитись пізніше за перший рендер, тож не фіксуємо в useState).
+  const [manualAccountId, setManualAccountId] = useState<string | undefined>(existing?.account_id)
+  const selectedAccountId =
+    manualAccountId ?? accounts.find((a) => a.id === globalSelectedAccountId)?.id ?? accounts[0]?.id
   const [amountStr, setAmountStr] = useState(existing ? String(existing.amount / 100) : '')
   const [showCalc, setShowCalc] = useState(false)
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(existing?.category_id ?? null)
@@ -99,7 +107,7 @@ function TransactionForm({ id, existing }: TransactionFormProps) {
       setError('Оберіть категорію')
       return
     }
-    if (!account || !user) {
+    if (!selectedAccountId || !user) {
       setError('Рахунок не знайдено')
       return
     }
@@ -109,6 +117,7 @@ function TransactionForm({ id, existing }: TransactionFormProps) {
         await updateTransaction.mutateAsync({
           id,
           data: {
+            account_id: selectedAccountId,
             category_id: selectedCategoryId,
             type,
             amount: Math.round(amountUah * 100),
@@ -119,7 +128,7 @@ function TransactionForm({ id, existing }: TransactionFormProps) {
         navigate(-1)
       } else {
         await createTransaction.mutateAsync({
-          account_id: account.id,
+          account_id: selectedAccountId,
           category_id: selectedCategoryId,
           type,
           amount: Math.round(amountUah * 100),
@@ -160,6 +169,31 @@ function TransactionForm({ id, existing }: TransactionFormProps) {
         <div className="px-4">
           <ExpenseIncomeTabs active={type} onChange={handleTypeChange} />
         </div>
+
+        {/* ── Рахунок (тільки якщо їх декілька) ────────────── */}
+        {accounts.length > 1 && (
+          <div className="px-4">
+            <p className="text-xs font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+              Рахунок
+            </p>
+            <div className="flex gap-2 flex-wrap">
+              {accounts.map((acc) => (
+                <button
+                  key={acc.id}
+                  type="button"
+                  onClick={() => setManualAccountId(acc.id)}
+                  className="px-3 py-1.5 rounded-xl text-sm font-medium transition-all"
+                  style={{
+                    backgroundColor: acc.id === selectedAccountId ? 'var(--color-accent)' : 'var(--color-bg-card)',
+                    color: acc.id === selectedAccountId ? '#1B2A2A' : 'var(--color-text-secondary)',
+                  }}
+                >
+                  {acc.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* ── Сума + перемикач калькулятора ────────────────── */}
         <div className="px-4">

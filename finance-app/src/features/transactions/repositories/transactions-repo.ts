@@ -21,7 +21,8 @@ export const transactionsRepo = {
           t.date >= from &&
           t.date <= to &&
           (filter.type === undefined || t.type === filter.type) &&
-          (filter.categoryId === undefined || t.category_id === filter.categoryId)
+          (filter.categoryId === undefined || t.category_id === filter.categoryId) &&
+          (filter.accountId === undefined || t.account_id === filter.accountId)
       )
 
     // Сортуємо по даті — нові першими
@@ -71,7 +72,7 @@ export const transactionsRepo = {
 
   async update(
     id: string,
-    data: Partial<Pick<LocalTransaction, 'category_id' | 'amount' | 'date' | 'comment' | 'type'>>
+    data: Partial<Pick<LocalTransaction, 'account_id' | 'category_id' | 'amount' | 'date' | 'comment' | 'type'>>
   ): Promise<void> {
     await db.transactions.update(id, {
       ...data,

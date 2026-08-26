@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Trash2, X, Pencil } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
+import { useAccounts } from '@/hooks/use-accounts'
 import { useTransactions, useDeleteTransaction } from '@/hooks/use-transactions'
 import { useCategories } from '@/hooks/use-categories'
 import { useUIStore } from '@/stores/ui-store'
@@ -28,6 +29,9 @@ export function TransactionsListScreen() {
   const customRange = customFrom && customTo ? { from: customFrom, to: customTo } : null
   const categoryFilter = useFilterStore((s) => s.categoryFilter)
   const setCategoryFilter = useFilterStore((s) => s.setCategoryFilter)
+  const { data: accounts = [] } = useAccounts(user?.id)
+  const selectedAccountId = useUIStore((s) => s.selectedAccountId)
+  const activeAccountId = accounts.find((a) => a.id === selectedAccountId)?.id ?? accounts[0]?.id
 
   const { from, to } = getPeriodRange(selectedPeriod, periodAnchor, customRange)
   const periodHeader = formatPeriodHeader(selectedPeriod, periodAnchor, customRange)
@@ -40,6 +44,7 @@ export function TransactionsListScreen() {
     dateFrom: from,
     dateTo: to,
     categoryId: categoryFilter ?? undefined,
+    accountId: activeAccountId,
   })
 
   const deleteTransaction = useDeleteTransaction(user?.id ?? '')

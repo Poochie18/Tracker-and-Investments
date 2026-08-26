@@ -11,6 +11,7 @@ import { OverviewScreen } from '@/features/transactions/components/OverviewScree
 import { AddTransactionScreen } from '@/features/transactions/components/AddTransactionScreen'
 import { TransactionsListScreen } from '@/features/transactions/components/TransactionsListScreen'
 import { SettingsScreen } from '@/features/settings/components/SettingsScreen'
+import { ManageAccountsScreen } from '@/features/settings/components/ManageAccountsScreen'
 import { ManageCategoriesScreen } from '@/features/settings/components/ManageCategoriesScreen'
 import { BackupScreen } from '@/features/settings/components/BackupScreen'
 import { InvestmentsScreen } from '@/features/investments/components/InvestmentsScreen'
@@ -72,6 +73,7 @@ export default function App() {
               <Route path="/investments/type/:assetType" element={<InvestmentsScreen />} />
               <Route path="/investments/:id" element={<InvestmentDetailScreen />} />
               <Route path="/settings" element={<SettingsScreen />} />
+              <Route path="/settings/accounts" element={<ManageAccountsScreen />} />
               <Route path="/settings/categories" element={<ManageCategoriesScreen />} />
               <Route path="/settings/backup" element={<BackupScreen />} />
             </Route>
