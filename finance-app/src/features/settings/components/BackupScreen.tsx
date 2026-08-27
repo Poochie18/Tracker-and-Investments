@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Download, Upload, CheckCircle2, AlertCircle, FileSpreadsheet, Sheet } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
-import { downloadBackup, importBackup, type ImportMode } from '../services/backup-service'
+import { importBackup, type ImportMode } from '../services/backup-service'
 import { downloadTransactionsJson, downloadTransactionsXlsx } from '../services/transactions-export-service'
 import { getPeriodRange } from '@/lib/utils/dates'
 import { useQueryClient } from '@tanstack/react-query'
@@ -17,7 +17,6 @@ export function BackupScreen() {
   const queryClient = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const [exporting, setExporting] = useState(false)
   const [importMode, setImportMode] = useState<ImportMode>('merge')
   const [importing, setImporting] = useState(false)
   const [confirmReplace, setConfirmReplace] = useState(false)
@@ -58,20 +57,6 @@ export function BackupScreen() {
       setStatus({ type: 'error', message: 'Помилка при експорті транзакцій' })
     } finally {
       setTxExporting(null)
-    }
-  }
-
-  const handleExport = async () => {
-    if (!user) return
-    setExporting(true)
-    setStatus(null)
-    try {
-      await downloadBackup(user.id)
-      setStatus({ type: 'success', message: 'Дані успішно експортовано' })
-    } catch {
-      setStatus({ type: 'error', message: 'Помилка при експорті' })
-    } finally {
-      setExporting(false)
     }
   }
 
@@ -155,30 +140,6 @@ export function BackupScreen() {
             </p>
           </div>
         )}
-
-        {/* ── Експорт ───────────────────────────────────────── */}
-        <div
-          className="rounded-2xl p-4 flex flex-col gap-3"
-          style={{ backgroundColor: 'var(--color-bg-card)' }}
-        >
-          <div>
-            <p className="font-medium text-sm" style={{ color: 'var(--color-text-primary)' }}>
-              Експортувати дані
-            </p>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>
-              Зберегти всі транзакції та категорії у файл JSON
-            </p>
-          </div>
-          <button
-            onClick={handleExport}
-            disabled={exporting || !user}
-            className="flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-opacity disabled:opacity-60"
-            style={{ backgroundColor: 'var(--color-accent)', color: '#1B2A2A' }}
-          >
-            <Download size={16} />
-            {exporting ? 'Експортуємо...' : 'Завантажити файл'}
-          </button>
-        </div>
 
         {/* ── Експорт транзакцій за період (xlsx/json) ───────── */}
         <div
