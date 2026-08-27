@@ -15,11 +15,14 @@ interface PeriodSelectorProps {
   onChange: (period: PeriodType) => void
 }
 
-// Чекбокс "Весь час" — частина вибору періоду, тому показується
-// завжди разом з рештою селектора (і на Огляді, і в списку транзакцій).
+// "Весь час" — не окрема кнопка поряд з рештою (там вона просто висіла б
+// сама по собі, ні до чого не прив'язана), а опція всередині панелі
+// "Період": тап на "Період" відкриває панель з вибором — або довільний
+// діапазон дат, або перемкнутись на "Весь час". Тобто зникає й з'являється
+// разом з тією ж панеллю, а не постійно.
 export function PeriodSelector({ active, onChange }: PeriodSelectorProps) {
   const { customFrom, customTo, setCustomRange } = useUIStore()
-  const [showCustom, setShowCustom] = useState(active === 'custom')
+  const [showPeriodPanel, setShowPeriodPanel] = useState(active === 'custom' || active === 'all')
 
   // Форматуємо дату у YYYY-MM-DD для <input type="date">
   const toInputVal = (d: Date | null) =>
@@ -39,6 +42,8 @@ export function PeriodSelector({ active, onChange }: PeriodSelectorProps) {
     setCustomRange(from <= to ? from : to, to)
   }
 
+  const isPeriodButtonActive = active === 'custom' || active === 'all'
+
   return (
     <div className="px-4 py-2 flex flex-col gap-2">
       <div className="flex gap-1">
@@ -49,7 +54,7 @@ export function PeriodSelector({ active, onChange }: PeriodSelectorProps) {
               key={key}
               onClick={() => {
                 onChange(key)
-                setShowCustom(false)
+                setShowPeriodPanel(false)
               }}
               className="flex-1 py-1.5 text-xs rounded-lg font-medium transition-all"
               style={{
@@ -62,70 +67,64 @@ export function PeriodSelector({ active, onChange }: PeriodSelectorProps) {
           )
         })}
         <button
-          onClick={() => {
-            setShowCustom(!showCustom)
-            if (!showCustom) {
-              // При першому відкритті — якщо ще немає custom range, не міняємо period
-              // Якщо вже є custom range — встановлюємо
-              if (customFrom && customTo) onChange('custom')
-            }
-          }}
+          onClick={() => setShowPeriodPanel((v) => !v)}
           className="flex-1 py-1.5 text-xs rounded-lg font-medium transition-all"
           style={{
-            backgroundColor: active === 'custom' ? 'var(--color-accent)' : 'transparent',
-            color: active === 'custom' ? '#1B2A2A' : 'var(--color-text-secondary)',
+            backgroundColor: isPeriodButtonActive ? 'var(--color-accent)' : 'transparent',
+            color: isPeriodButtonActive ? '#1B2A2A' : 'var(--color-text-secondary)',
           }}
         >
-          Період
+          {active === 'all' ? 'Весь час' : 'Період'}
         </button>
       </div>
 
-      <label className="flex items-center gap-2 px-1 py-0.5 text-xs cursor-pointer select-none w-fit">
-        <input
-          type="checkbox"
-          checked={active === 'all'}
-          onChange={(e) => {
-            setShowCustom(false)
-            onChange(e.target.checked ? 'all' : 'month')
-          }}
-          className="w-3.5 h-3.5 rounded accent-[var(--color-accent)]"
-        />
-        <span style={{ color: 'var(--color-text-secondary)' }}>Весь час</span>
-      </label>
-
-      {/* Кастомний діапазон дат */}
-      {showCustom && (
+      {/* Панель "Період" — довільний діапазон дат АБО "Весь час" */}
+      {showPeriodPanel && (
         <div
-          className="flex items-center gap-2 px-3 py-2 rounded-xl"
+          className="flex flex-col gap-2 px-3 py-2 rounded-xl"
           style={{ backgroundColor: 'var(--color-bg-card)' }}
         >
-          <input
-            type="date"
-            value={toInputVal(customFrom)}
-            max={toInputVal(customTo)}
-            onChange={(e) => handleCustomFrom(e.target.value)}
-            className="flex-1 text-xs bg-transparent outline-none"
-            style={{ color: 'var(--color-text-primary)', colorScheme: 'dark' }}
-          />
-          <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>—</span>
-          <input
-            type="date"
-            value={toInputVal(customTo)}
-            min={toInputVal(customFrom)}
-            onChange={(e) => handleCustomTo(e.target.value)}
-            className="flex-1 text-xs bg-transparent outline-none"
-            style={{ color: 'var(--color-text-primary)', colorScheme: 'dark' }}
-          />
-          <button
-            onClick={() => {
-              if (customFrom && customTo) onChange('custom')
-              setShowCustom(false)
-            }}
-            className="px-3 py-1 rounded-lg text-xs font-semibold"
-            style={{ backgroundColor: 'var(--color-accent)', color: '#1B2A2A' }}
-          >
-            OK
-          </button>
+          <label className="flex items-center gap-2 text-xs cursor-pointer select-none w-fit">
+            <input
+              type="checkbox"
+              checked={active === 'all'}
+              onChange={(e) => onChange(e.target.checked ? 'all' : 'month')}
+              className="w-3.5 h-3.5 rounded accent-[var(--color-accent)]"
+            />
+            <span style={{ color: 'var(--color-text-secondary)' }}>Весь час</span>
+          </label>
+
+          {active !== 'all' && (
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={toInputVal(customFrom)}
+                max={toInputVal(customTo)}
+                onChange={(e) => handleCustomFrom(e.target.value)}
+                className="flex-1 text-xs bg-transparent outline-none"
+                style={{ color: 'var(--color-text-primary)', colorScheme: 'dark' }}
+              />
+              <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>—</span>
+              <input
+                type="date"
+                value={toInputVal(customTo)}
+                min={toInputVal(customFrom)}
+                onChange={(e) => handleCustomTo(e.target.value)}
+                className="flex-1 text-xs bg-transparent outline-none"
+                style={{ color: 'var(--color-text-primary)', colorScheme: 'dark' }}
+              />
+              <button
+                onClick={() => {
+                  if (customFrom && customTo) onChange('custom')
+                  setShowPeriodPanel(false)
+                }}
+                className="px-3 py-1 rounded-lg text-xs font-semibold"
+                style={{ backgroundColor: 'var(--color-accent)', color: '#1B2A2A' }}
+              >
+                OK
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
