@@ -53,7 +53,10 @@ export const investmentsRepo = {
       coupon_amount: data.type === 'bond' && data.couponAmount != null ? Math.round(data.couponAmount * 100) : null,
       redemption_amount: data.type === 'bond' && data.redemptionAmount != null ? Math.round(data.redemptionAmount * 100) : null,
       redemption_date: data.type === 'bond' && data.redemptionDate ? data.redemptionDate.toISOString() : null,
-      ticker_symbol: data.type === 'crypto' && data.tickerSymbol ? data.tickerSymbol.trim().toUpperCase() : null,
+      ticker_symbol:
+        (data.type === 'crypto' || data.type === 'stock') && data.tickerSymbol
+          ? data.tickerSymbol.trim().toUpperCase()
+          : null,
       source: 'manual',
       created_at: now,
       updated_at: now,
@@ -95,7 +98,10 @@ export const investmentsRepo = {
       coupon_amount: data.type === 'bond' && data.couponAmount != null ? Math.round(data.couponAmount * 100) : null,
       redemption_amount: data.type === 'bond' && data.redemptionAmount != null ? Math.round(data.redemptionAmount * 100) : null,
       redemption_date: data.type === 'bond' && data.redemptionDate ? data.redemptionDate.toISOString() : null,
-      ticker_symbol: data.type === 'crypto' && data.tickerSymbol ? data.tickerSymbol.trim().toUpperCase() : null,
+      ticker_symbol:
+        (data.type === 'crypto' || data.type === 'stock') && data.tickerSymbol
+          ? data.tickerSymbol.trim().toUpperCase()
+          : null,
       // source навмисно не чіпаємо тут — рядок, створений синком біржі
       // (source='binance_sync'), лишається таким і при ручному редагуванні
       // ціни купівлі через цю ж форму.
@@ -116,29 +122,29 @@ export const investmentsRepo = {
     })
   },
 
-  // Пропорційно масштабує собівартість (purchase_price) УСІХ крипто-активів
-  // користувача так, щоб їх сумарне "Вкладено" стало newTotalUnits (у
-  // "копійках" USD). Для пенсіла біля АГРЕГОВАНОГО "Вкладено" на вкладці
-  // Крипта — саму суму редагувати напряму нема сенсу (вона похідна від N
-  // рядків), тож розподіляємо зміну пропорційно по монетах: множимо
-  // purchase_price кожної на один коефіцієнт (invested_i = purchase_price_i
-  // × quantity_i, тож множення purchase_price_i на ratio масштабує
-  // invested_i на той самий ratio незалежно від quantity).
-  async scaleCryptoInvested(userId: string, newTotalUnits: number): Promise<void> {
-    const cryptoInvestments = await db.investments
+  // Пропорційно масштабує собівартість (purchase_price) УСІХ активів заданого
+  // типу користувача так, щоб їх сумарне "Вкладено" стало newTotalUnits (у
+  // "копійках" валюти портфеля). Для пенсіла біля АГРЕГОВАНОГО "Вкладено"
+  // (Крипта, Акції) — саму суму редагувати напряму нема сенсу (вона похідна
+  // від N рядків), тож розподіляємо зміну пропорційно: множимо purchase_price
+  // кожного рядка на один коефіцієнт (invested_i = purchase_price_i ×
+  // quantity_i, тож множення purchase_price_i на ratio масштабує invested_i
+  // на той самий ratio незалежно від quantity).
+  async scaleInvestedByType(userId: string, type: InvestmentType, newTotalUnits: number): Promise<void> {
+    const items = await db.investments
       .where('user_id')
       .equals(userId)
-      .filter((i) => i.type === 'crypto' && i.deleted_at === null)
+      .filter((i) => i.type === type && i.deleted_at === null)
       .toArray()
-    if (cryptoInvestments.length === 0) return
+    if (items.length === 0) return
 
     const now = new Date().toISOString()
-    const oldTotal = cryptoInvestments.reduce((sum, i) => sum + i.purchase_price * i.quantity, 0)
+    const oldTotal = items.reduce((sum, i) => sum + i.purchase_price * i.quantity, 0)
 
     if (oldTotal > 0) {
       const ratio = newTotalUnits / oldTotal
       await Promise.all(
-        cryptoInvestments.map((i) =>
+        items.map((i) =>
           db.investments.update(i.id, {
             purchase_price: i.purchase_price * ratio,
             updated_at: now,
@@ -152,12 +158,12 @@ export const investmentsRepo = {
 
     // Нема з чого масштабувати (усі purchase_price = 0, напр. щойно
     // підключений синк) — розподіляємо пропорційно поточній вартості;
-    // якщо й вона нульова — рівними частками між монетами.
-    const totalCurrentValue = cryptoInvestments.reduce((sum, i) => sum + i.current_price * i.quantity, 0)
+    // якщо й вона нульова — рівними частками між рядками.
+    const totalCurrentValue = items.reduce((sum, i) => sum + i.current_price * i.quantity, 0)
     await Promise.all(
-      cryptoInvestments.map((i) => {
+      items.map((i) => {
         const weight =
-          totalCurrentValue > 0 ? (i.current_price * i.quantity) / totalCurrentValue : 1 / cryptoInvestments.length
+          totalCurrentValue > 0 ? (i.current_price * i.quantity) / totalCurrentValue : 1 / items.length
         const newPurchasePrice = i.quantity > 0 ? (newTotalUnits * weight) / i.quantity : 0
         return db.investments.update(i.id, {
           purchase_price: newPurchasePrice,
@@ -167,6 +173,29 @@ export const investmentsRepo = {
         })
       })
     )
+  },
+
+  // "Докупити" акцію — на відміну від облігацій (партії/лоти з датою кожної
+  // покупки, bond-lots-repo.ts), для акцій ведемо простий "плаский" рахунок:
+  // кількість підсумовується, а середня ціна купівлі — простим середнім
+  // старої і нової ціни (не зваженим по кількості, за прямою вимогою:
+  // "ціна додається до ціни купівлі яка вже була і ділиться навпіл").
+  // Дата купівлі оновлюється на дату цієї (найостаннішої) докупівлі.
+  async buyMoreStock(
+    id: string,
+    input: { date: string; quantity: number; price: number } // price — копійки за 1 шт
+  ): Promise<void> {
+    const existing = await db.investments.get(id)
+    if (!existing) throw new Error('Актив не знайдено')
+
+    await db.investments.update(id, {
+      quantity: existing.quantity + input.quantity,
+      purchase_price: Math.round((existing.purchase_price + input.price) / 2),
+      purchase_date: new Date(input.date).toISOString(),
+      updated_at: new Date().toISOString(),
+      _sync_status: 'pending',
+      _local_updated_at: Date.now(),
+    })
   },
 
   // Soft delete — як і транзакції, щоб інші пристрої дізнались про видалення

@@ -8,3 +8,6 @@ verify_jwt = true
 
 [functions.crypto-binance-sync]
 verify_jwt = true
+
+[functions.stock-price-sync]
+verify_jwt = true

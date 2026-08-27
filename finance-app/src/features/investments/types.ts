@@ -50,6 +50,7 @@ export interface InvestmentFormData {
   couponAmount?: number      // сума купонної виплати ЗА 1 ШТ, як ціна купівлі (у валюті активу)
   redemptionAmount?: number  // сума погашення (номінал) ЗА 1 ШТ, як ціна купівлі (у валюті активу)
   redemptionDate?: Date      // дата погашення
-  // Тільки для type === 'crypto' — тікер для курсу (напр. "BTC")
+  // Тільки для type === 'crypto' (Binance) або 'stock' (Finnhub) — тікер
+  // для автопідтягування курсу/ціни (напр. "BTC", "AAPL")
   tickerSymbol?: string
 }
