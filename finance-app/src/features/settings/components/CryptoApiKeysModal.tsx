@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { format } from 'date-fns'
 import { uk } from 'date-fns/locale'
-import { KeyRound, Plus, RefreshCw, Trash2, X } from 'lucide-react'
+import { KeyRound, Plus, RefreshCw, Trash2, X, Info } from 'lucide-react'
 import {
   useBinanceConnectionStatus, useSaveBinanceKeys, useDisconnectBinance, useSyncBinanceBalances,
 } from '@/hooks/use-crypto-exchange'
@@ -27,6 +27,7 @@ export function CryptoApiKeysModal({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [syncingAfterSave, setSyncingAfterSave] = useState(false)
+  const [showGuide, setShowGuide] = useState(false)
 
   const handleSave = async () => {
     setError(null)
@@ -80,9 +81,20 @@ export function CryptoApiKeysModal({ onClose }: { onClose: () => void }) {
         style={{ backgroundColor: 'var(--color-bg-card)' }}
       >
         <div className="flex items-center justify-between">
-          <p className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>
-            API-ключі бірж
-          </p>
+          <div className="flex items-center gap-1.5">
+            <p className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>
+              API-ключі бірж
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowGuide(true)}
+              className="p-1 -m-1"
+              aria-label="Як отримати ключ Binance"
+              title="Як отримати ключ Binance"
+            >
+              <Info size={16} color="var(--color-text-secondary)" />
+            </button>
+          </div>
           <button type="button" onClick={onClose} className="p-1">
             <X size={20} color="var(--color-text-secondary)" />
           </button>
@@ -225,6 +237,68 @@ export function CryptoApiKeysModal({ onClose }: { onClose: () => void }) {
             </div>
           </div>
         )}
+
+        {showGuide && <BinanceGuideModal onClose={() => setShowGuide(false)} />}
+      </div>
+    </div>
+  )
+}
+
+// ── Гайд "як отримати ключ Binance" ───────────────────────
+
+function BinanceGuideModal({ onClose }: { onClose: () => void }) {
+  const steps = [
+    'Зайди на binance.com і увійди у свій акаунт.',
+    'Профіль → «Управління API» (API Management).',
+    'Натисни «Створити API» (Create API), обери «System generated» і підтверди через 2FA/пошту.',
+    'У правах доступу увімкни лише «Enable Reading» — Trading і Withdraw вмикати НЕ треба, застосунку вони не потрібні.',
+    'За бажанням обмеж ключ по IP для додаткової безпеки.',
+    'Скопіюй API Key і Secret Key (секрет показується лише один раз) і встав їх у форму нижче.',
+  ]
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end justify-center">
+      <div className="absolute inset-0" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }} onClick={onClose} />
+      <div
+        className="relative w-full max-w-lg rounded-t-3xl p-6 pb-10 flex flex-col gap-4 max-h-[85vh] overflow-y-auto"
+        style={{ backgroundColor: 'var(--color-bg-card)' }}
+      >
+        <div className="flex items-center justify-between">
+          <p className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>
+            Як отримати ключ Binance
+          </p>
+          <button type="button" onClick={onClose} className="p-1">
+            <X size={20} color="var(--color-text-secondary)" />
+          </button>
+        </div>
+
+        <ol className="flex flex-col gap-3">
+          {steps.map((step, i) => (
+            <li key={i} className="flex items-start gap-3">
+              <span
+                className="flex items-center justify-center w-5 h-5 rounded-full text-xs font-semibold shrink-0 mt-0.5"
+                style={{ backgroundColor: 'var(--color-accent)', color: '#1B2A2A' }}
+              >
+                {i + 1}
+              </span>
+              <p className="text-sm" style={{ color: 'var(--color-text-primary)' }}>{step}</p>
+            </li>
+          ))}
+        </ol>
+
+        <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+          Ключ з правами лише читання не дозволяє виводити чи торгувати активами — безпечно
+          використовувати його для автосинхронізації балансів.
+        </p>
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="w-full py-3 rounded-2xl font-semibold text-sm"
+          style={{ backgroundColor: 'var(--color-accent)', color: '#1B2A2A' }}
+        >
+          Зрозуміло
+        </button>
       </div>
     </div>
   )

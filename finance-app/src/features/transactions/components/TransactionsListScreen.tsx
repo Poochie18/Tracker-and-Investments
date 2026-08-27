@@ -94,7 +94,7 @@ export function TransactionsListScreen() {
         />
       </div>
 
-      <PeriodSelector active={selectedPeriod} onChange={setSelectedPeriod} showAllTime />
+      <PeriodSelector active={selectedPeriod} onChange={setSelectedPeriod} />
 
       {/* ── Активний фільтр по категорії ─────────────────── */}
       {activeFilterCategory && (

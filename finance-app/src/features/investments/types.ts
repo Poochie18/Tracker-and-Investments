@@ -22,13 +22,16 @@ export const INVESTMENT_TYPE_META: Record<InvestmentType, InvestmentTypeMeta> = 
 
 export const INVESTMENT_TYPES: InvestmentType[] = ['stock', 'crypto', 'bond', 'deposit', 'other']
 
-// Типи, які можна створити вручну через форму "Новий актив". Крипта сюди
-// не входить — вона з'являється в портфелі ЛИШЕ через синхронізацію з
-// Binance (кількість/поточну ціну веде біржа), ручне створення дублювало б
-// синк і плуталось би з ним (див. cryptoSyncLocked). Редагування собівартості
-// існуючих крипто-рядків — окремою легкою формою (пенсіл біля "Вкладено"
-// в CryptoListItem), не через цей екран.
-export const ADDABLE_INVESTMENT_TYPES: InvestmentType[] = INVESTMENT_TYPES.filter((t) => t !== 'crypto')
+// Типи, які можна створити вручну через форму "Новий актив". "Інше" сюди
+// не входить — цей тип лишився без вкладки в нижній навігації (недосяжний
+// після створення), тож додавати нові такі активи більше нема сенсу.
+// Крипту, навпаки, МОЖНА додати вручну (source='manual') — не в кожного є
+// ключ Binance, і хтось хоче просто вести облік монет самостійно. Такі
+// рядки поводяться як звичайний актив (їх видно/можна редагувати через
+// InvestmentListItem, на відміну від синхронізованих з Binance — джерело
+// зберігається в investment.source і не змінюється manual-редагуванням,
+// investments-repo.ts:update).
+export const ADDABLE_INVESTMENT_TYPES: InvestmentType[] = INVESTMENT_TYPES.filter((t) => t !== 'other')
 
 // Дані форми додавання/редагування активу (суми у гривнях/валюті, не в копійках)
 export interface InvestmentFormData {

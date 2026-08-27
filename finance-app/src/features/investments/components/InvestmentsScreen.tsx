@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { format } from 'date-fns'
+import { uk } from 'date-fns/locale'
 import { TrendingUp, ChevronDown, ChevronUp, KeyRound, ChevronRight } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { useInvestments, useScaleCryptoInvested } from '@/hooks/use-investments'
@@ -22,7 +24,7 @@ import { EditCryptoInvestedModal } from './EditCryptoInvestedModal'
 import { BondFiscalYearTable } from './BondFiscalYearTable'
 import { PortfolioOverview } from './PortfolioOverview'
 import { computeDepositTotals } from '../deposit-schedule'
-import { computeBondTotals } from '../bond-schedule'
+import { computeBondTotals, getNextBondPaymentAcrossPortfolio } from '../bond-schedule'
 import { useFiscalYearStartMonth } from '@/lib/settings/fiscal-year'
 import { INVESTMENT_TYPE_META } from '../types'
 import type { InvestmentType } from '@/lib/db/schema'
@@ -160,6 +162,25 @@ export function InvestmentsScreen() {
   const typeMeta = INVESTMENT_TYPE_META[activeType]
   const emptyText = `Ще немає жодного активу типу «${typeMeta.label}».`
 
+  // Найближча виплата (купон/погашення) серед усіх облігацій — окремим
+  // рядком під зведенням, щоб не заходити в кожну картку окремо.
+  const nextBondPayment = (() => {
+    if (activeType !== 'bond' || !rates) return null
+    const couponDatesByInvestment = new Map<string, typeof bondCouponDates>()
+    for (const d of bondCouponDates) {
+      const list = couponDatesByInvestment.get(d.investment_id) ?? []
+      list.push(d)
+      couponDatesByInvestment.set(d.investment_id, list)
+    }
+    const lotsByInvestment = new Map<string, typeof bondLots>()
+    for (const l of bondLots) {
+      const list = lotsByInvestment.get(l.investment_id) ?? []
+      list.push(l)
+      lotsByInvestment.set(l.investment_id, list)
+    }
+    return getNextBondPaymentAcrossPortfolio(investments, couponDatesByInvestment, lotsByInvestment, rates)
+  })()
+
   return (
     <div
       className="flex flex-col min-h-full"
@@ -185,24 +206,50 @@ export function InvestmentsScreen() {
 
       <div className="flex flex-col gap-4 py-4 pb-24">
         {investments.length > 0 && activeType === 'bond' && rates ? (
-          <div className="mx-4 flex gap-3 items-stretch">
-            <PortfolioSummaryCard
-              invested={invested}
-              currentValue={currentValue}
-              pnl={pnl}
-              stacked
-              className="flex-1"
-            />
-            <div className="flex-1 p-4 rounded-3xl" style={{ backgroundColor: 'var(--color-bg-card)' }}>
-              <BondFiscalYearTable
-                bonds={investments}
-                bondCouponDates={bondCouponDates}
-                bondLots={bondLots}
-                rates={rates}
-                fiscalYearStartMonth={fiscalYearStartMonth}
+          <>
+            <div className="mx-4 flex gap-3 items-stretch">
+              <PortfolioSummaryCard
+                invested={invested}
+                currentValue={currentValue}
+                pnl={pnl}
+                stacked
+                className="flex-1"
               />
+              <div className="flex-1 p-4 rounded-3xl" style={{ backgroundColor: 'var(--color-bg-card)' }}>
+                <BondFiscalYearTable
+                  bonds={investments}
+                  bondCouponDates={bondCouponDates}
+                  bondLots={bondLots}
+                  rates={rates}
+                  fiscalYearStartMonth={fiscalYearStartMonth}
+                />
+              </div>
             </div>
-          </div>
+
+            {/* Найближча виплата (купон/погашення) серед усіх облігацій —
+                окремим рядком під зведенням, щоб не заходити в кожну картку. */}
+            {nextBondPayment && (
+              <div
+                className="mx-4 flex items-center justify-between gap-3 px-4 py-3 rounded-2xl"
+                style={{ backgroundColor: 'var(--color-bg-card)' }}
+              >
+                <div className="min-w-0">
+                  <p className="text-[11px]" style={{ color: 'var(--color-text-secondary)' }}>
+                    Наступна виплата
+                  </p>
+                  <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text-primary)' }}>
+                    {nextBondPayment.investmentName}
+                  </p>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>
+                    {format(new Date(nextBondPayment.date), 'd MMMM yyyy', { locale: uk })}
+                  </p>
+                </div>
+                <p className="text-sm font-semibold flex-shrink-0" style={{ color: 'var(--color-income)' }}>
+                  +{Money.fromKopiyky(nextBondPayment.amountUah).formatWhole('₴')}
+                </p>
+              </div>
+            )}
+          </>
         ) : (
           investments.length > 0 && (
             <PortfolioSummaryCard
@@ -257,7 +304,19 @@ export function InvestmentsScreen() {
             if (activeType === 'deposit') return <DepositListItem key={inv.id} investment={inv} />
             if (activeType === 'bond') return <BondListItem key={inv.id} investment={inv} />
             if (activeType === 'crypto') {
-              return <CryptoListItem key={inv.id} investment={inv} />
+              // Синхронізовані з Binance монети — мінімальна картка (кількість
+              // веде біржа, редагувати нічого, окрім собівартості через пенсіл
+              // зверху). Введені вручну — звичайна картка активу з "вкладено/
+              // поточна/прибуток" і переходом на редагування, як для акцій.
+              return inv.source === 'binance_sync' ? (
+                <CryptoListItem key={inv.id} investment={inv} />
+              ) : (
+                <InvestmentListItem
+                  key={inv.id}
+                  investment={inv}
+                  onPress={() => navigate(`/investments/${inv.id}`)}
+                />
+              )
             }
             return (
               <InvestmentListItem
