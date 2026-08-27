@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { investmentsRepo } from '@/features/investments/repositories/investments-repo'
 import type { InvestmentFormData } from '@/features/investments/types'
+import type { InvestmentType } from '@/lib/db/schema'
 import { useSyncContext } from '@/lib/sync/sync-context'
 
 export const investmentKeys = {
@@ -68,15 +69,31 @@ export function useUpdateInvestmentPrice(userId: string) {
   })
 }
 
-// Пенсіл біля АГРЕГОВАНОГО "Вкладено" на вкладці Крипта — масштабує
-// собівартість усіх крипто-рядків користувача пропорційно, щоб їх сума
-// стала новим введеним значенням (див. investmentsRepo.scaleCryptoInvested).
-export function useScaleCryptoInvested(userId: string) {
+// Пенсіл біля АГРЕГОВАНОГО "Вкладено" (Крипта, Акції) — масштабує
+// собівартість усіх рядків заданого типу пропорційно, щоб їх сума стала
+// новим введеним значенням (див. investmentsRepo.scaleInvestedByType).
+export function useScaleInvestedByType(userId: string, type: InvestmentType) {
   const queryClient = useQueryClient()
   const { triggerSync } = useSyncContext()
 
   return useMutation({
-    mutationFn: (newTotalUnits: number) => investmentsRepo.scaleCryptoInvested(userId, newTotalUnits),
+    mutationFn: (newTotalUnits: number) => investmentsRepo.scaleInvestedByType(userId, type, newTotalUnits),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: investmentKeys.all(userId) })
+      triggerSync()
+    },
+  })
+}
+
+// "Докупити" акцію (InvestmentsScreen → StockListItem → StockBuySheet) —
+// кількість підсумовується, ціна усереднюється (investmentsRepo.buyMoreStock).
+export function useBuyMoreStock(userId: string) {
+  const queryClient = useQueryClient()
+  const { triggerSync } = useSyncContext()
+
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: { date: string; quantity: number; price: number } }) =>
+      investmentsRepo.buyMoreStock(id, input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: investmentKeys.all(userId) })
       triggerSync()

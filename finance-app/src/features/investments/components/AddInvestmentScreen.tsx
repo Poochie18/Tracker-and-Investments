@@ -97,6 +97,7 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType }: Inve
   const [couponDates, setCouponDates_] = useState<string[]>(
     existingCouponDates.map((d) => d.payment_date.slice(0, 10))
   )
+  const [tickerSymbol, setTickerSymbol] = useState(existing?.ticker_symbol ?? '')
   const [error, setError] = useState<string | null>(null)
 
   const isSaving = createInvestment.isPending || updateInvestment.isPending
@@ -155,6 +156,7 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType }: Inve
       couponAmount: isBond && couponAmount ? parseFloat(couponAmount.replace(',', '.')) : undefined,
       redemptionAmount: isBond && redemptionAmount ? parseFloat(redemptionAmount.replace(',', '.')) : undefined,
       redemptionDate: isBond && redemptionDate ? new Date(redemptionDate) : undefined,
+      tickerSymbol: type === 'stock' && tickerSymbol.trim() ? tickerSymbol.trim() : undefined,
     }
 
     try {
@@ -221,7 +223,13 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType }: Inve
                 <button
                   key={t}
                   type="button"
-                  onClick={() => setType(t)}
+                  onClick={() => {
+                    setType(t)
+                    // Валюта за замовчуванням для нового активу — акції й
+                    // крипта зазвичай ведуться в доларах, решта в гривні.
+                    // При редагуванні існуючого активу валюту не чіпаємо.
+                    if (!isEdit) setCurrency(t === 'stock' || t === 'crypto' ? 'USD' : 'UAH')
+                  }}
                   className="flex flex-col items-center gap-1.5"
                 >
                   <div
@@ -256,6 +264,20 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType }: Inve
             style={{ color: 'var(--color-text-primary)' }}
           />
         </Field>
+
+        {/* ── Тікер (тільки для акцій) — за ним підтягується поточна ціна ── */}
+        {type === 'stock' && (
+          <Field label="Тікер (для автопідтягування ціни)">
+            <input
+              type="text"
+              placeholder="напр. AAPL"
+              value={tickerSymbol}
+              onChange={(e) => setTickerSymbol(e.target.value.toUpperCase())}
+              className="w-full text-base bg-transparent border-none outline-none"
+              style={{ color: 'var(--color-text-primary)' }}
+            />
+          </Field>
+        )}
 
         {/* ── Кількість + Валюта ───────────────────────────────── */}
         <div className="grid grid-cols-2 gap-4">

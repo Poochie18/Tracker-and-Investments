@@ -2,28 +2,30 @@ import { useState } from 'react'
 import { X } from 'lucide-react'
 import { Money } from '@/lib/utils/money'
 
-interface EditCryptoInvestedModalProps {
-  currentInvested: Money // поточне агреговане "Вкладено", $ (USD-копійки)
+interface EditInvestedModalProps {
+  title: string           // напр. "Скільки всього вкладено в крипту"
+  description: string     // пояснення, чому редагується єдиним числом
+  currentInvested: Money  // поточне агреговане "Вкладено" (мінімальні одиниці валюти)
   onClose: () => void
   onSave: (newTotalUnits: number) => Promise<void>
 }
 
-// Модалка пенсіла біля агрегованого "Вкладено" на вкладці Крипта. Сума —
-// похідна від N синхронізованих монет, тож редагуємо її як одне число:
-// введене значення пропорційно розподіляється по собівартості всіх монет
-// (investmentsRepo.scaleCryptoInvested) — тому й "Огляд", і сама вкладка
-// Крипта одразу відображають нову суму консистентно (одні дані, не окремий
+// Модалка пенсіла біля агрегованого "Вкладено" (Крипта, Акції). Сума —
+// похідна від N рядків, тож редагуємо її як одне число: введене значення
+// пропорційно розподіляється по собівартості всіх рядків цього типу
+// (investmentsRepo.scaleInvestedByType) — тому й "Огляд", і сама вкладка
+// одразу відображають нову суму консистентно (одні дані, не окремий
 // override десь збоку).
-export function EditCryptoInvestedModal({ currentInvested, onClose, onSave }: EditCryptoInvestedModalProps) {
+export function EditInvestedModal({ title, description, currentInvested, onClose, onSave }: EditInvestedModalProps) {
   const [value, setValue] = useState(currentInvested.toUah().toString())
   const [saving, setSaving] = useState(false)
 
   const handleSave = async () => {
-    const usd = parseFloat(value.replace(',', '.'))
-    if (isNaN(usd) || usd < 0) return
+    const num = parseFloat(value.replace(',', '.'))
+    if (isNaN(num) || num < 0) return
     setSaving(true)
     try {
-      await onSave(Math.round(usd * 100))
+      await onSave(Math.round(num * 100))
       onClose()
     } finally {
       setSaving(false)
@@ -39,15 +41,14 @@ export function EditCryptoInvestedModal({ currentInvested, onClose, onSave }: Ed
       >
         <div className="flex items-center justify-between">
           <p className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>
-            Скільки всього вкладено в крипту
+            {title}
           </p>
           <button type="button" onClick={onClose} className="p-1">
             <X size={20} color="var(--color-text-secondary)" />
           </button>
         </div>
         <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-          Кількість і поточну ціну кожної монети веде синк з Binance — тут можна підправити лише загальну
-          собівартість (у $). Значення розподілиться пропорційно по всіх монетах.
+          {description}
         </p>
         <input
           type="text"

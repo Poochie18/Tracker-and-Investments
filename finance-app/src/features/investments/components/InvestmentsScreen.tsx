@@ -4,7 +4,7 @@ import { format } from 'date-fns'
 import { uk } from 'date-fns/locale'
 import { TrendingUp, ChevronDown, ChevronUp, KeyRound, ChevronRight } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
-import { useInvestments, useScaleCryptoInvested } from '@/hooks/use-investments'
+import { useInvestments, useScaleInvestedByType } from '@/hooks/use-investments'
 import { useBinanceConnectionStatus, useCleanupOrphanedCryptoSync } from '@/hooks/use-crypto-exchange'
 import { useExchangeRates } from '@/hooks/use-exchange-rates'
 import { useAllDepositContributions } from '@/hooks/use-deposit-contributions'
@@ -17,10 +17,13 @@ import { AccountIconButton } from '@/components/AccountIconButton'
 import { PortfolioSummaryCard } from './PortfolioSummaryCard'
 import { InvestmentListItem } from './InvestmentListItem'
 import { CryptoListItem } from './CryptoListItem'
+import { StockListItem } from './StockListItem'
 import { DepositListItem } from './DepositListItem'
 import { BondListItem } from './BondListItem'
 import { CryptoSyncButton } from './CryptoSyncButton'
-import { EditCryptoInvestedModal } from './EditCryptoInvestedModal'
+import { StockSyncButton } from './StockSyncButton'
+import { EditInvestedModal } from './EditInvestedModal'
+import { FreeCashCard } from './FreeCashCard'
 import { BondFiscalYearTable } from './BondFiscalYearTable'
 import { PortfolioOverview } from './PortfolioOverview'
 import { computeDepositTotals } from '../deposit-schedule'
@@ -54,7 +57,9 @@ export function InvestmentsScreen() {
   useCleanupOrphanedCryptoSync(user?.id, activeType === 'crypto')
   const [showDust, setShowDust] = useState(false)
   const [showEditInvested, setShowEditInvested] = useState(false)
-  const scaleCryptoInvested = useScaleCryptoInvested(user?.id ?? '')
+  // activeType null лише на "Огляді" (ранній return нижче) — тут завжди
+  // конкретний тип; хук викликається безумовно (правила хуків), як і раніше.
+  const scaleInvested = useScaleInvestedByType(user?.id ?? '', activeType ?? 'crypto')
 
   // Тут сума рахується без конвертації валют — на вкладці одного типу
   // активи зазвичай в одній валюті (напр. усі акції в USD). Якщо activeType
@@ -198,10 +203,17 @@ export function InvestmentsScreen() {
         <h1 className="text-xl font-semibold flex-1" style={{ color: 'var(--color-text-primary)' }}>
           {typeMeta.label}
         </h1>
-        {/* Одна кнопка синку на вкладці "Крипта" — сама сумісно тягне і
-            баланси з Binance, і звичайний push/pull (SyncStatusIndicator
-            тут навмисно не рендериться, щоб не було двох кнопок поруч). */}
-        {activeType === 'crypto' ? <CryptoSyncButton /> : <SyncStatusIndicator />}
+        {/* Одна кнопка синку на вкладках "Крипта"/"Акції" — сама сумісно
+            тягне ціни (Binance/Finnhub) і звичайний push/pull
+            (SyncStatusIndicator тут навмисно не рендериться, щоб не було
+            двох кнопок поруч). */}
+        {activeType === 'crypto' ? (
+          <CryptoSyncButton />
+        ) : activeType === 'stock' ? (
+          <StockSyncButton />
+        ) : (
+          <SyncStatusIndicator />
+        )}
       </div>
 
       <div className="flex flex-col gap-4 py-4 pb-24">
@@ -251,17 +263,26 @@ export function InvestmentsScreen() {
             )}
           </>
         ) : (
-          investments.length > 0 && (
-            <PortfolioSummaryCard
-              invested={invested}
-              currentValue={currentValue}
-              pnl={pnl}
-              pnlPercent={pnlPercent}
-              uahEquivalent={uahEquivalent}
-              currencySymbol={activeType === 'crypto' ? '$' : '₴'}
-              onEditInvested={activeType === 'crypto' ? () => setShowEditInvested(true) : undefined}
-            />
-          )
+          <>
+            {investments.length > 0 && (
+              <PortfolioSummaryCard
+                invested={invested}
+                currentValue={currentValue}
+                pnl={pnl}
+                pnlPercent={pnlPercent}
+                uahEquivalent={uahEquivalent}
+                currencySymbol={activeType === 'crypto' || activeType === 'stock' ? '$' : '₴'}
+                onEditInvested={
+                  activeType === 'crypto' || activeType === 'stock' ? () => setShowEditInvested(true) : undefined
+                }
+              />
+            )}
+            {/* Вільні кошти — готівка на брокерському рахунку, ще не
+                інвестована. Показуємо завжди на вкладці "Акції" (не лише
+                коли є хоч одна акція) — саме поле може бути заповнене й
+                до першої покупки. */}
+            {activeType === 'stock' && <FreeCashCard />}
+          </>
         )}
 
         <div className="px-4 flex flex-col gap-2">
@@ -303,6 +324,7 @@ export function InvestmentsScreen() {
           {visibleInvestments.map((inv) => {
             if (activeType === 'deposit') return <DepositListItem key={inv.id} investment={inv} />
             if (activeType === 'bond') return <BondListItem key={inv.id} investment={inv} />
+            if (activeType === 'stock') return <StockListItem key={inv.id} investment={inv} />
             if (activeType === 'crypto') {
               // Синхронізовані з Binance монети — мінімальна картка (кількість
               // веде біржа, редагувати нічого, окрім собівартості через пенсіл
@@ -345,10 +367,16 @@ export function InvestmentsScreen() {
       </div>
 
       {showEditInvested && (
-        <EditCryptoInvestedModal
+        <EditInvestedModal
+          title={activeType === 'stock' ? 'Скільки всього вкладено в акції' : 'Скільки всього вкладено в крипту'}
+          description={
+            activeType === 'stock'
+              ? 'Кількість і собівартість кожної акції редагуються по одній через картку активу — тут можна підправити лише загальну собівартість. Значення розподілиться пропорційно по всіх акціях.'
+              : 'Кількість і поточну ціну кожної монети веде синк з Binance — тут можна підправити лише загальну собівартість (у $). Значення розподілиться пропорційно по всіх монетах.'
+          }
           currentInvested={invested}
           onClose={() => setShowEditInvested(false)}
-          onSave={(newTotalUnits) => scaleCryptoInvested.mutateAsync(newTotalUnits)}
+          onSave={(newTotalUnits) => scaleInvested.mutateAsync(newTotalUnits)}
         />
       )}
     </div>
