@@ -102,6 +102,10 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType }: Inve
 
   const isSaving = createInvestment.isPending || updateInvestment.isPending
   const isBond = type === 'bond'
+  // Для акцій поточну ціну вручну не вводимо — тягнеться з Finnhub за
+  // тікером (StockSyncButton). До першого синку current_price = purchase_price,
+  // так само, як для облігацій.
+  const hidesCurrentPrice = isBond || type === 'stock'
   // "Кількість"/"Ціна купівлі"/"Дата купівлі" для облігацій, що
   // редагуються, теж доступні для правки напряму — окремо від партій
   // (bond_lots), керованих через BondListItem → "Докупити"/тап на партію.
@@ -132,9 +136,16 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType }: Inve
       setError('Введіть ціну купівлі')
       return
     }
-    // Для облігацій поточну ціну не вводимо (тримаємо до погашення за номіналом)
-    if (!isBond && (!currentPrice || isNaN(currentPriceNum) || currentPriceNum < 0)) {
+    // Для облігацій поточну ціну не вводимо (тримаємо до погашення за номіналом),
+    // для акцій — теж не вводимо (підтягується з Finnhub за тікером)
+    if (!hidesCurrentPrice && (!currentPrice || isNaN(currentPriceNum) || currentPriceNum < 0)) {
       setError('Введіть поточну ціну')
+      return
+    }
+    // Без тікера синку (StockSyncButton) не буде що оновлювати — рядок
+    // так і лишиться з current_price = purchase_price назавжди.
+    if (type === 'stock' && !tickerSymbol.trim()) {
+      setError('Введіть тікер для автоматичного оновлення ціни')
       return
     }
     if (!user) {
@@ -147,7 +158,7 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType }: Inve
       type,
       quantity: quantityNum,
       purchasePrice: purchasePriceNum,
-      currentPrice: isBond ? purchasePriceNum : currentPriceNum,
+      currentPrice: hidesCurrentPrice ? purchasePriceNum : currentPriceNum,
       currency,
       purchaseDate: new Date(purchaseDate),
       notes: notes.trim() || undefined,
@@ -265,20 +276,6 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType }: Inve
           />
         </Field>
 
-        {/* ── Тікер (тільки для акцій) — за ним підтягується поточна ціна ── */}
-        {type === 'stock' && (
-          <Field label="Тікер (для автопідтягування ціни)">
-            <input
-              type="text"
-              placeholder="напр. AAPL"
-              value={tickerSymbol}
-              onChange={(e) => setTickerSymbol(e.target.value.toUpperCase())}
-              className="w-full text-base bg-transparent border-none outline-none"
-              style={{ color: 'var(--color-text-primary)' }}
-            />
-          </Field>
-        )}
-
         {/* ── Кількість + Валюта ───────────────────────────────── */}
         <div className="grid grid-cols-2 gap-4">
           <Field label="Кількість" disabled={bondFieldsLocked}>
@@ -310,8 +307,9 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType }: Inve
           </Field>
         </div>
 
-        {/* ── Ціна купівлі + поточна ціна (для облігацій поточна ціна не
-             потрібна — тримаємо до погашення за номіналом) ──────────── */}
+        {/* ── Ціна купівлі + поточна ціна/тікер (для облігацій поточна ціна
+             не потрібна — тримаємо до погашення за номіналом; для акцій —
+             замість неї тікер, ціна підтягується з Finnhub) ──────────── */}
         <div className="grid grid-cols-2 gap-4">
           <Field label={`Ціна купівлі (середня, ${currency})`} disabled={bondFieldsLocked}>
             <input
@@ -326,7 +324,7 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType }: Inve
             />
           </Field>
 
-          {type === 'bond' ? (
+          {type === 'bond' && (
             <Field label={`Сума погашення за 1 шт (${currency})`}>
               <input
                 type="text"
@@ -338,7 +336,22 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType }: Inve
                 style={{ color: 'var(--color-text-primary)' }}
               />
             </Field>
-          ) : (
+          )}
+
+          {type === 'stock' && (
+            <Field label="Тікер (напр. AAPL)">
+              <input
+                type="text"
+                placeholder="AAPL"
+                value={tickerSymbol}
+                onChange={(e) => setTickerSymbol(e.target.value.toUpperCase())}
+                className="w-full text-base bg-transparent border-none outline-none"
+                style={{ color: 'var(--color-text-primary)' }}
+              />
+            </Field>
+          )}
+
+          {!hidesCurrentPrice && (
             <Field label={`Поточна ціна (${currency})`}>
               <input
                 type="text"
