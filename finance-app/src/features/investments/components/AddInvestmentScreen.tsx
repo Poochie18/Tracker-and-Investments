@@ -74,7 +74,13 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType }: Inve
   const [currentPrice, setCurrentPrice] = useState(
     existing ? String(existing.current_price / 100) : ''
   )
-  const [currency, setCurrency] = useState(existing?.currency ?? 'UAH')
+  // За замовчуванням для нового активу (existing відсутній) — акції й
+  // крипта в доларах, решта в гривні; та сама логіка, що й при перемиканні
+  // типу нижче (onClick type-кнопок), але тут — для типу, з яким форма вже
+  // змонтована одразу (напр. дефолтний 'stock'), без явного кліку.
+  const [currency, setCurrency] = useState(
+    existing?.currency ?? (type === 'stock' || type === 'crypto' ? 'USD' : 'UAH')
+  )
   const [purchaseDate, setPurchaseDate] = useState(
     existing?.purchase_date.slice(0, 10) ?? new Date().toISOString().slice(0, 10)
   )
