@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="bg" cx="30%" cy="25%" r="85%">
+      <stop offset="0%" stop-color="#2d4f47"/>
+      <stop offset="100%" stop-color="#1b2a2a"/>
+    </radialGradient>
+    <linearGradient id="coin" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3ce0ae"/>
+      <stop offset="100%" stop-color="#00a377"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="512" height="512" rx="108" fill="url(#bg)"/>
+
+  <circle cx="256" cy="256" r="172" fill="url(#coin)"/>
+  <circle cx="256" cy="256" r="172" fill="none" stroke="#00c896" stroke-opacity="0.35" stroke-width="6"/>
+
+  <!-- Висхідний тренд -->
+  <polyline
+    points="146,318 210,254 254,290 366,178"
+    fill="none"
+    stroke="#f4fbf8"
+    stroke-width="20"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <polyline
+    points="308,178 366,178 366,236"
+    fill="none"
+    stroke="#f4fbf8"
+    stroke-width="20"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>

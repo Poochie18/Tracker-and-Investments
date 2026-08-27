@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Plus, Archive, RotateCcw, Check } from 'lucide-react'
+import { ArrowLeft, Plus, Archive, RotateCcw, Check, Pencil } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { useQueryClient } from '@tanstack/react-query'
 import { db } from '@/lib/db'
 import { categoriesRepo } from '@/features/transactions/repositories/categories-repo'
-import { getCategoryIcon } from '@/lib/utils/category-icons'
+import { getCategoryIcon, ICON_NAMES } from '@/lib/utils/category-icons'
 import { CategoryIconCircle } from '@/features/transactions/components/CategoryIconCircle'
 import { SwipeToReveal } from '@/components/SwipeToReveal'
 import type { LocalCategory, TransactionType } from '@/lib/db/schema'
@@ -18,13 +18,6 @@ const PRESET_COLORS = [
   '#ff922b', '#da77f2', '#f783ac', '#a9e34b', '#66d9e8',
   '#ff6b6b', '#ffa94d', '#c0eb75', '#63e6be', '#4dabf7',
   '#e599f7',
-]
-
-const ICON_NAMES = [
-  'ShoppingCart', 'Coffee', 'Car', 'Heart', 'Home', 'Shirt',
-  'Gamepad2', 'Dumbbell', 'BookOpen', 'Gift', 'Plane', 'Laptop',
-  'Wrench', 'Users', 'Landmark', 'Briefcase', 'TrendingUp', 'Building2',
-  'MoreHorizontal',
 ]
 
 // ── Хуки ──────────────────────────────────────────────────
@@ -71,6 +64,7 @@ export function ManageCategoriesScreen() {
 
   const [activeTab, setActiveTab] = useState<TransactionType>('expense')
   const [showCreate, setShowCreate] = useState(false)
+  const [editingCategory, setEditingCategory] = useState<LocalCategory | null>(null)
   const [showArchived, setShowArchived] = useState(false)
 
   const filtered = categories.filter(
@@ -145,16 +139,21 @@ export function ManageCategoriesScreen() {
             key={cat.id}
             category={cat}
             onToggle={() => toggleArchive.mutate({ id: cat.id, isArchived: cat.is_archived })}
+            onEdit={() => setEditingCategory(cat)}
           />
         ))}
       </div>
 
-      {/* ── Форма створення ───────────────────────────────── */}
-      {showCreate && (
-        <CreateCategorySheet
+      {/* ── Форма створення / редагування ─────────────────── */}
+      {(showCreate || editingCategory) && (
+        <CategorySheet
           userId={userId}
           defaultType={activeTab}
-          onClose={() => setShowCreate(false)}
+          category={editingCategory}
+          onClose={() => {
+            setShowCreate(false)
+            setEditingCategory(null)
+          }}
         />
       )}
     </div>
@@ -166,9 +165,11 @@ export function ManageCategoriesScreen() {
 function CategoryRow({
   category,
   onToggle,
+  onEdit,
 }: {
   category: LocalCategory
   onToggle: () => void
+  onEdit: () => void
 }) {
   const actionColor = category.is_archived ? 'var(--color-accent)' : 'rgba(255,107,107,0.85)'
   const ActionIcon = category.is_archived ? RotateCcw : Archive
@@ -176,12 +177,12 @@ function CategoryRow({
   return (
     <div className="rounded-2xl overflow-hidden">
       {category.is_system ? (
-        // Системні — без свайпу
+        // Системні — без свайпу (архівувати не можна), але редагувати можна
         <div
           className="flex items-center gap-3 px-3 py-3"
           style={{ backgroundColor: 'var(--color-bg-card)' }}
         >
-          <CategoryRowContent category={category} />
+          <CategoryRowContent category={category} onEdit={onEdit} />
         </div>
       ) : (
         <SwipeToReveal
@@ -206,7 +207,7 @@ function CategoryRow({
               opacity: category.is_archived ? 0.6 : 1,
             }}
           >
-            <CategoryRowContent category={category} />
+            <CategoryRowContent category={category} onEdit={onEdit} />
           </div>
         </SwipeToReveal>
       )}
@@ -214,7 +215,7 @@ function CategoryRow({
   )
 }
 
-function CategoryRowContent({ category }: { category: LocalCategory }) {
+function CategoryRowContent({ category, onEdit }: { category: LocalCategory; onEdit: () => void }) {
   return (
     <>
       <CategoryIconCircle iconName={category.icon_name} colorHex={category.color_hex} size="sm" />
@@ -228,26 +229,37 @@ function CategoryRowContent({ category }: { category: LocalCategory }) {
           </p>
         )}
       </div>
+      <button
+        type="button"
+        onClick={onEdit}
+        className="p-2 -m-2 shrink-0"
+        aria-label="Редагувати категорію"
+      >
+        <Pencil size={16} style={{ color: 'var(--color-text-secondary)' }} />
+      </button>
     </>
   )
 }
 
-// ── Bottom Sheet для створення ────────────────────────────
+// ── Bottom Sheet для створення / редагування ──────────────
 
-function CreateCategorySheet({
+function CategorySheet({
   userId,
   defaultType,
+  category,
   onClose,
 }: {
   userId: string
   defaultType: TransactionType
+  category: LocalCategory | null
   onClose: () => void
 }) {
+  const isEditing = category !== null
   const queryClient = useQueryClient()
-  const [name, setName] = useState('')
-  const [type, setType] = useState<TransactionType>(defaultType)
-  const [iconName, setIconName] = useState('MoreHorizontal')
-  const [colorHex, setColorHex] = useState('#00c896')
+  const [name, setName] = useState(category?.name ?? '')
+  const [type, setLocalType] = useState<TransactionType>(category?.type ?? defaultType)
+  const [iconName, setIconName] = useState(category?.icon_name ?? 'MoreHorizontal')
+  const [colorHex, setColorHex] = useState(category?.color_hex ?? '#00c896')
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -259,12 +271,16 @@ function CreateCategorySheet({
     setSaving(true)
     setError(null)
     try {
-      await categoriesRepo.create(userId, { name: name.trim(), type, icon_name: iconName, color_hex: colorHex })
+      if (isEditing) {
+        await categoriesRepo.update(category.id, { name: name.trim(), icon_name: iconName, color_hex: colorHex })
+      } else {
+        await categoriesRepo.create(userId, { name: name.trim(), type, icon_name: iconName, color_hex: colorHex })
+      }
       void queryClient.invalidateQueries({ queryKey: ['categories-all', userId] })
       void queryClient.invalidateQueries({ queryKey: ['categories', userId] })
       onClose()
     } catch {
-      setError('Не вдалось створити категорію')
+      setError(isEditing ? 'Не вдалось зберегти зміни' : 'Не вдалось створити категорію')
     } finally {
       setSaving(false)
     }
@@ -283,29 +299,35 @@ function CreateCategorySheet({
       >
         <div className="flex items-center justify-between">
           <p className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>
-            Нова категорія
+            {isEditing ? 'Редагувати категорію' : 'Нова категорія'}
           </p>
           <button onClick={onClose} className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
             Закрити
           </button>
         </div>
 
-        {/* Тип */}
-        <div className="flex gap-2">
-          {(['expense', 'income'] as TransactionType[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => setType(t)}
-              className="flex-1 py-2 rounded-xl text-sm font-medium"
-              style={{
-                backgroundColor: type === t ? 'var(--color-accent)' : 'rgba(255,255,255,0.06)',
-                color: type === t ? '#1B2A2A' : 'var(--color-text-secondary)',
-              }}
-            >
-              {t === 'expense' ? 'Витрата' : 'Дохід'}
-            </button>
-          ))}
-        </div>
+        {/* Тип — при редагуванні незмінний (щоб не плутати вже занесені транзакції) */}
+        {isEditing ? (
+          <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+            Тип: {type === 'expense' ? 'Витрата' : 'Дохід'}
+          </p>
+        ) : (
+          <div className="flex gap-2">
+            {(['expense', 'income'] as TransactionType[]).map((t) => (
+              <button
+                key={t}
+                onClick={() => setLocalType(t)}
+                className="flex-1 py-2 rounded-xl text-sm font-medium"
+                style={{
+                  backgroundColor: type === t ? 'var(--color-accent)' : 'rgba(255,255,255,0.06)',
+                  color: type === t ? '#1B2A2A' : 'var(--color-text-secondary)',
+                }}
+              >
+                {t === 'expense' ? 'Витрата' : 'Дохід'}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Назва */}
         <div>
@@ -391,7 +413,7 @@ function CreateCategorySheet({
           className="w-full py-3 rounded-2xl font-semibold text-sm transition-opacity disabled:opacity-60"
           style={{ backgroundColor: 'var(--color-accent)', color: '#1B2A2A' }}
         >
-          {saving ? 'Зберігаємо...' : 'Створити'}
+          {saving ? 'Зберігаємо...' : isEditing ? 'Зберегти' : 'Створити'}
         </button>
       </div>
     </div>

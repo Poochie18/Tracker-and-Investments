@@ -1,9 +1,13 @@
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Download, Upload, CheckCircle2, AlertCircle, FileSpreadsheet } from 'lucide-react'
+import { ArrowLeft, Download, Upload, CheckCircle2, AlertCircle, FileSpreadsheet, Sheet } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { downloadBackup, importBackup, type ImportMode } from '../services/backup-service'
+import { downloadTransactionsJson, downloadTransactionsXlsx } from '../services/transactions-export-service'
+import { getPeriodRange } from '@/lib/utils/dates'
 import { useQueryClient } from '@tanstack/react-query'
+
+type TxExportPeriod = 'month' | 'year' | 'all' | 'custom'
 
 type Status = { type: 'success' | 'error'; message: string } | null
 
@@ -19,6 +23,43 @@ export function BackupScreen() {
   const [confirmReplace, setConfirmReplace] = useState(false)
   const [pendingFile, setPendingFile] = useState<string | null>(null)
   const [status, setStatus] = useState<Status>(null)
+
+  // ── Експорт транзакцій за період (xlsx/json) ──────────────
+  const [txPeriod, setTxPeriod] = useState<TxExportPeriod>('month')
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
+  const [txExporting, setTxExporting] = useState<'xlsx' | 'json' | null>(null)
+
+  const resolveTxRange = () => {
+    if (txPeriod === 'custom') {
+      if (!customFrom || !customTo) return null
+      const from = new Date(customFrom)
+      const to = new Date(customTo)
+      return from <= to ? { from, to } : { from: to, to: from }
+    }
+    return getPeriodRange(txPeriod)
+  }
+
+  const handleExportTransactions = async (kind: 'xlsx' | 'json') => {
+    if (!user) return
+    const range = resolveTxRange()
+    if (!range) {
+      setStatus({ type: 'error', message: 'Вкажи обидві дати довільного періоду' })
+      return
+    }
+    setTxExporting(kind)
+    setStatus(null)
+    try {
+      const isAllTime = txPeriod === 'all'
+      if (kind === 'xlsx') await downloadTransactionsXlsx(user.id, range.from, range.to, isAllTime)
+      else await downloadTransactionsJson(user.id, range.from, range.to, isAllTime)
+      setStatus({ type: 'success', message: 'Транзакції успішно експортовано' })
+    } catch {
+      setStatus({ type: 'error', message: 'Помилка при експорті транзакцій' })
+    } finally {
+      setTxExporting(null)
+    }
+  }
 
   const handleExport = async () => {
     if (!user) return
@@ -137,6 +178,85 @@ export function BackupScreen() {
             <Download size={16} />
             {exporting ? 'Експортуємо...' : 'Завантажити файл'}
           </button>
+        </div>
+
+        {/* ── Експорт транзакцій за період (xlsx/json) ───────── */}
+        <div
+          className="rounded-2xl p-4 flex flex-col gap-3"
+          style={{ backgroundColor: 'var(--color-bg-card)' }}
+        >
+          <div>
+            <p className="font-medium text-sm" style={{ color: 'var(--color-text-primary)' }}>
+              Експорт транзакцій
+            </p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>
+              Список транзакцій за обраний період у зручному вигляді
+            </p>
+          </div>
+
+          {/* Період */}
+          <div className="flex gap-1">
+            {([
+              { key: 'month', label: 'Цей місяць' },
+              { key: 'year', label: 'Цей рік' },
+              { key: 'all', label: 'Весь час' },
+              { key: 'custom', label: 'Період' },
+            ] as { key: TxExportPeriod; label: string }[]).map(({ key, label }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setTxPeriod(key)}
+                className="flex-1 py-1.5 text-xs rounded-lg font-medium transition-all"
+                style={{
+                  backgroundColor: txPeriod === key ? 'var(--color-accent)' : 'rgba(255,255,255,0.06)',
+                  color: txPeriod === key ? '#1B2A2A' : 'var(--color-text-secondary)',
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {txPeriod === 'custom' && (
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={customFrom}
+                onChange={(e) => setCustomFrom(e.target.value)}
+                className="flex-1 text-xs px-2 py-2 rounded-lg bg-transparent outline-none"
+                style={{ color: 'var(--color-text-primary)', backgroundColor: 'rgba(255,255,255,0.06)', colorScheme: 'dark' }}
+              />
+              <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>—</span>
+              <input
+                type="date"
+                value={customTo}
+                onChange={(e) => setCustomTo(e.target.value)}
+                className="flex-1 text-xs px-2 py-2 rounded-lg bg-transparent outline-none"
+                style={{ color: 'var(--color-text-primary)', backgroundColor: 'rgba(255,255,255,0.06)', colorScheme: 'dark' }}
+              />
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <button
+              onClick={() => handleExportTransactions('xlsx')}
+              disabled={txExporting !== null || !user}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-sm transition-opacity disabled:opacity-60"
+              style={{ backgroundColor: 'var(--color-accent)', color: '#1B2A2A' }}
+            >
+              <Sheet size={16} />
+              {txExporting === 'xlsx' ? 'Готуємо...' : '.xlsx'}
+            </button>
+            <button
+              onClick={() => handleExportTransactions('json')}
+              disabled={txExporting !== null || !user}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-sm transition-opacity disabled:opacity-60"
+              style={{ backgroundColor: 'rgba(255,255,255,0.08)', color: 'var(--color-text-primary)' }}
+            >
+              <Download size={16} />
+              {txExporting === 'json' ? 'Готуємо...' : '.json'}
+            </button>
+          </div>
         </div>
 
         {/* ── Імпорт з Excel (з іншого застосунку) ───────────── */}

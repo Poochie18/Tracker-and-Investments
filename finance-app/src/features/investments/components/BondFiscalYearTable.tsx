@@ -47,7 +47,7 @@ export function BondFiscalYearTable({ bonds, bondCouponDates, bondLots, rates, f
           const isProfit = profit >= 0
           const isCurrent = year.key === currentYearKey
           return (
-            <div key={year.key} className="flex flex-col">
+            <div key={year.key} className="flex items-center justify-between gap-2">
               <p className="text-[11px] leading-tight" style={{ color: 'var(--color-text-secondary)' }}>
                 {year.label}
                 {isCurrent && <span style={{ color: 'var(--color-accent)' }}> •</span>}

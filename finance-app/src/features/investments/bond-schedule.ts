@@ -198,6 +198,59 @@ export function aggregateBondProfitByYear(
   )
 }
 
+export interface NextBondPayment {
+  investmentName: string
+  date: string      // ISO 8601 (дата)
+  amount: number     // копійки, у валюті облігації
+  currency: string
+}
+
+// Найближча ще не минула виплата (купон і/або погашення) по одній
+// облігації — перший рядок графіка з isPast === false.
+export function getNextBondPayment(
+  investment: LocalInvestment,
+  dates: LocalBondCouponDate[],
+  lots: LocalBondLot[],
+  asOf: Date = new Date()
+): NextBondPayment | null {
+  const rows = getBondPaymentSchedule(
+    dates,
+    investment.redemption_date,
+    lots,
+    investment.coupon_amount,
+    investment.redemption_amount ?? investment.purchase_price,
+    asOf
+  )
+  const next = rows.find((r) => !r.isPast)
+  if (!next) return null
+  return { investmentName: investment.name, date: next.date, amount: next.amount, currency: investment.currency }
+}
+
+// Найближча виплата серед УСІХ облігацій портфеля — беремо ту з
+// найранішою датою. amountUah — сума, зведена в гривню (як і решта
+// агрегованих показників), щоб коректно порівнювати дати різних валют.
+export function getNextBondPaymentAcrossPortfolio(
+  bonds: LocalInvestment[],
+  couponDatesByInvestment: Map<string, LocalBondCouponDate[]>,
+  lotsByInvestment: Map<string, LocalBondLot[]>,
+  rates: ExchangeRates,
+  asOf: Date = new Date()
+): (NextBondPayment & { amountUah: number }) | null {
+  let best: (NextBondPayment & { amountUah: number }) | null = null
+
+  for (const bond of bonds) {
+    const dates = couponDatesByInvestment.get(bond.id) ?? []
+    const lots = lotsByInvestment.get(bond.id) ?? []
+    const next = getNextBondPayment(bond, dates, lots, asOf)
+    if (!next) continue
+    if (!best || next.date < best.date) {
+      best = { ...next, amountUah: convertToUahMinorUnits(next.amount, next.currency, rates) }
+    }
+  }
+
+  return best
+}
+
 // Прибуток по облігаціях за поточний фінансовий рік (у гривневому
 // базисі) — саме це число показується на "Огляді", а не прибуток за
 // весь строк, як для інших типів активів.

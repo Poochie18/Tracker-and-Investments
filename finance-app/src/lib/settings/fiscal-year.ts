@@ -46,7 +46,7 @@ export function useFiscalYearStartMonth(): number {
 
 export interface FiscalYear {
   key: string      // унікальний ключ для групування/сортування, напр. "2026-06"
-  label: string    // показується користувачу: "2026" (якщо старт — січень) або "2026–2027"
+  label: string    // показується користувачу: "2026" (якщо старт — січень) або "2026-27"
   startDate: Date  // початок фінансового року (включно)
 }
 
@@ -60,7 +60,7 @@ export function getFiscalYear(date: Date, startMonth: number): FiscalYear {
   const startYear = month >= startMonth ? year : year - 1
   const startDate = new Date(Date.UTC(startYear, startMonth - 1, 1))
   const key = `${startYear}-${String(startMonth).padStart(2, '0')}`
-  const label = startMonth === 1 ? String(startYear) : `${startYear}–${startYear + 1}`
+  const label = startMonth === 1 ? String(startYear) : `${startYear}-${String(startYear + 1).slice(-2)}`
   return { key, label, startDate }
 }
 
