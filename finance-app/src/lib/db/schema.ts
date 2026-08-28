@@ -172,6 +172,35 @@ export interface PortfolioSnapshot {
   deleted_at: string | null
 }
 
+// Частота повторення регулярного платежу.
+export type RecurringFrequency = 'once' | 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly'
+
+// Регулярний платіж — шаблон, з якого автоматично генеруються звичайні
+// транзакції (Transaction) за розкладом. Сама генерація (клієнтська —
+// use-recurring-payments.ts, серверна — Edge Function на pg_cron) лише
+// створює рядки в transactions і зсуває last_generated_date; сам шаблон
+// ніде напряму не відображається як "витрата/дохід".
+export interface RecurringPayment {
+  id: string
+  user_id: string
+  name: string                 // назва платежу, напр. "Оренда квартири"
+  type: TransactionType
+  amount: number                // ЗАВЖДИ у копійках!
+  currency: string
+  category_id: string
+  account_id: string
+  comment: string | null
+  frequency: RecurringFrequency
+  start_date: string            // ISO 8601 (дата) — від якої дати діє розклад
+  start_time: string            // 'HH:MM' — час дня для нагадування/генерації
+  end_date: string | null        // ISO 8601 (дата) — null = без дати завершення
+  is_active: boolean             // false = призупинено (виключено без видалення)
+  last_generated_date: string | null  // ISO 8601 (дата) останнього згенерованого випадку
+  created_at: string
+  updated_at: string
+  deleted_at: string | null      // null = активний, не-null = видалений (soft delete)
+}
+
 export interface Tag {
   id: string
   user_id: string
@@ -231,6 +260,12 @@ export interface LocalBondLot extends BondLot {
 }
 
 export interface LocalPortfolioSnapshot extends PortfolioSnapshot {
+  _sync_status: SyncStatus
+  _sync_error: string | null
+  _local_updated_at: number
+}
+
+export interface LocalRecurringPayment extends RecurringPayment {
   _sync_status: SyncStatus
   _sync_error: string | null
   _local_updated_at: number

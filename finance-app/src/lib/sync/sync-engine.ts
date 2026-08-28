@@ -8,7 +8,7 @@ import { resolveConflict } from './conflict-resolver'
 import { isLocalOnly } from '@/lib/auth/local-mode'
 import type {
   LocalTransaction, LocalCategory, LocalAccount, LocalInvestment, LocalDepositContribution,
-  LocalBondCouponDate, LocalBondLot, LocalPortfolioSnapshot,
+  LocalBondCouponDate, LocalBondLot, LocalPortfolioSnapshot, LocalRecurringPayment,
 } from '@/lib/db/schema'
 
 // ============================================================
@@ -37,6 +37,14 @@ interface SyncEngineOptions {
 
 const SYNC_INTERVAL_MS = 30_000      // перевіряємо pending кожні 30 сек
 const PAGE_SIZE = 500                 // кількість записів на сторінку при pull
+
+// Наскільки "свіжим" вважається останній повний pull — якщо застосунок
+// відкрили повторно раніше цього порогу, на старті НЕ тягнемо все з
+// Supabase знову (даремний трафік/час, дані рідко змінюються), а просто
+// показуємо те, що вже в Dexie, і покладаємось на realtime-підписку.
+// Кнопка "Синхронізувати зараз" (manualSync) цей порог ігнорує — завжди
+// форсує повний pull.
+const FULL_PULL_STALE_MS = 15 * 60 * 1000 // 15 хвилин
 
 export class SyncEngine {
   private userId: string
@@ -73,14 +81,18 @@ export class SyncEngine {
       }
     })
 
-    // Повний pull при кожному старті (вході в застосунок), якщо онлайн —
-    // без гварду "тільки якщо Dexie порожня" (той залишав пристрої з уже
-    // наявними локальними даними без свіжих змін з інших пристроїв аж до
-    // ручного "Синхронізувати зараз" або спрацювання realtime).
+    // Повний pull при вході в застосунок, якщо онлайн — але лише якщо
+    // минулого pull-а не було зовсім, або він застарів (> FULL_PULL_STALE_MS).
+    // Швидкі повторні відкриття (застосунок згорнули й одразу розгорнули)
+    // не тягнуть все з Supabase знову — Dexie вже свіжа, а realtime і так
+    // підхопить зміни з інших пристроїв, поки застосунок відкритий.
     if (onlineDetector.isOnline) {
       this.onStateChange('syncing')
-      await this.pullAll()
-      this.invalidateQueries()
+      if (this.isFullPullDue()) {
+        await this.pullAll()
+        this.markFullPullDone()
+        this.invalidateQueries()
+      }
       await this.sync()
     } else {
       this.onStateChange('offline')
@@ -143,6 +155,7 @@ export class SyncEngine {
 
     try {
       await this.pullAll()
+      this.markFullPullDone()
       const result = await flushSyncQueue(this.userId)
 
       if (result.errorCount > 0) {
@@ -159,6 +172,22 @@ export class SyncEngine {
     } finally {
       this.isSyncing = false
     }
+  }
+
+  // ── TTL повного pull (localStorage, не Dexie — суто UI-таймер) ────
+
+  private fullPullTimestampKey(): string {
+    return `sync_last_full_pull_${this.userId}`
+  }
+
+  private isFullPullDue(): boolean {
+    const raw = localStorage.getItem(this.fullPullTimestampKey())
+    if (!raw) return true
+    return Date.now() - Number(raw) >= FULL_PULL_STALE_MS
+  }
+
+  private markFullPullDone(): void {
+    localStorage.setItem(this.fullPullTimestampKey(), String(Date.now()))
   }
 
   private async sync(): Promise<void> {
@@ -201,6 +230,7 @@ export class SyncEngine {
       this.pullBondCouponDates(),
       this.pullBondLots(),
       this.pullPortfolioSnapshots(),
+      this.pullRecurringPayments(),
     ])
   }
 
@@ -372,6 +402,33 @@ export class SyncEngine {
     await db.portfolioSnapshots.bulkPut(localSnapshots)
   }
 
+  private async pullRecurringPayments(): Promise<void> {
+    const { data } = await supabase
+      .from('recurring_payments')
+      .select('*')
+      .eq('user_id', this.userId)
+
+    if (!data) return
+
+    // Як і pullInvestments — last_generated_date оновлюють ОБИДВІ сторони
+    // (клієнтська автогенерація і серверний cron), тож не можна беззастережно
+    // перезаписувати щойно зроблену локальну pending-зміну застарілими
+    // серверними даними.
+    const localRecurring: LocalRecurringPayment[] = []
+    for (const r of data) {
+      const local = await db.recurringPayments.get(r.id)
+      if (local && local._sync_status === 'pending' && resolveConflict(local, r) === 'local') continue
+      localRecurring.push({
+        ...r,
+        _sync_status: 'synced',
+        _sync_error: null,
+        _local_updated_at: Date.now(),
+      })
+    }
+
+    await db.recurringPayments.bulkPut(localRecurring)
+  }
+
   // ── Realtime Subscription ─────────────────────────────────
   //
   // Supabase надсилає події при будь-якій зміні в БД (INSERT/UPDATE/DELETE).
@@ -424,6 +481,19 @@ export class SyncEngine {
           filter: `user_id=eq.${this.userId}`,
         },
         (payload) => void this.handleDepositContributionChange(payload)
+      )
+      // Регулярні платежі — щоб last_generated_date, зсунутий cron-функцією
+      // (генерація, поки застосунок закритий), одразу підхопився на екрані
+      // "Регулярні" без ручного оновлення.
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'recurring_payments',
+          filter: `user_id=eq.${this.userId}`,
+        },
+        (payload) => void this.handleRecurringPaymentChange(payload)
       )
       .subscribe()
   }
@@ -526,6 +596,30 @@ export class SyncEngine {
     this.invalidateQueries()
   }
 
+  private async handleRecurringPaymentChange(
+    payload: { eventType: string; new: Record<string, unknown> }
+  ): Promise<void> {
+    const { eventType, new: newRecord } = payload
+    if (eventType === 'DELETE') return
+
+    const remoteData = newRecord as unknown as LocalRecurringPayment
+    const localRecord = await db.recurringPayments.get(remoteData.id)
+
+    if (localRecord && localRecord._sync_status === 'pending') {
+      const winner = resolveConflict(localRecord, remoteData)
+      if (winner === 'local') return
+    }
+
+    await db.recurringPayments.put({
+      ...remoteData,
+      _sync_status: 'synced',
+      _sync_error: null,
+      _local_updated_at: Date.now(),
+    })
+
+    this.invalidateQueries()
+  }
+
   // Інвалідуємо TanStack Query кеш → компоненти перечитують з Dexie
   private invalidateQueries(): void {
     void this.queryClient.invalidateQueries({ queryKey: ['transactions'] })
@@ -536,5 +630,6 @@ export class SyncEngine {
     void this.queryClient.invalidateQueries({ queryKey: ['bond-coupon-dates'] })
     void this.queryClient.invalidateQueries({ queryKey: ['bond-lots'] })
     void this.queryClient.invalidateQueries({ queryKey: ['portfolio-snapshots'] })
+    void this.queryClient.invalidateQueries({ queryKey: ['recurring-payments'] })
   }
 }

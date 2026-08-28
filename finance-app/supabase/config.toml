@@ -11,3 +11,9 @@ verify_jwt = true
 
 [functions.stock-price-sync]
 verify_jwt = true
+
+# Викликається pg_cron (013_recurring_payments.sql), не залогіненим
+# користувачем — user JWT тут нема, авторизація через власний CRON_SECRET
+# у заголовку Authorization (перевіряється всередині функції).
+[functions.recurring-payments-cron]
+verify_jwt = false

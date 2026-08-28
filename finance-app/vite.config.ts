@@ -15,8 +15,19 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      // injectManifest (не generateSW) — потрібен власний src/sw.ts з
+      // 'push'/'notificationclick' обробниками для нагадувань про
+      // регулярні платежі (recurring-payments-cron шле web-push, поки
+      // застосунок закритий). precache статики й далі підставляється
+      // автоматично (self.__WB_MANIFEST в sw.ts).
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
+      injectManifest: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+      },
       // Включаємо dev-режим для Service Worker під час розробки
-      devOptions: { enabled: true },
+      devOptions: { enabled: true, type: 'module' },
       manifest: {
         name: 'Мої фінанси',
         short_name: 'Фінанси',
@@ -35,17 +46,6 @@ export default defineConfig({
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable',
-          },
-        ],
-      },
-      workbox: {
-        // Precache: HTML, JS, CSS — Cache First
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        runtimeCaching: [
-          {
-            // Supabase API — тільки мережа, не кешуємо
-            urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
-            handler: 'NetworkOnly',
           },
         ],
       },

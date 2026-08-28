@@ -29,5 +29,10 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src"],
+  // sw.ts живе в іншому глобальному контексті (ServiceWorkerGlobalScope,
+  // lib "webworker") — конфліктує з DOM lib решти застосунку (напр. тип
+  // `self`). vite-plugin-pwa (injectManifest) транспілює й типізує його
+  // окремо через tsconfig.sw.json, тут із перевірки типів виключаємо.
+  "exclude": ["src/sw.ts"]
 }

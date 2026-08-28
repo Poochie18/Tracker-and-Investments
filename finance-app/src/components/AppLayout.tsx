@@ -3,6 +3,8 @@ import { BarChart2, List, LineChart, Repeat, PieChart, Landmark, FileText, Bitco
 import { BottomNav } from './BottomNav'
 import { SecondaryNav, type SecondaryNavItem } from './SecondaryNav'
 import { useFilterStore } from '@/stores/filter-store'
+import { usePriceAutoSync } from '@/hooks/use-price-auto-sync'
+import { useRecurringAutoGenerate } from '@/hooks/use-recurring-auto-generate'
 
 // Екрани-"дриль-даун" (форми Додати/Редагувати, детальна картка активу) —
 // там нема другого рівня навігації, зосереджуємось на самому екрані
@@ -27,6 +29,14 @@ export function AppLayout() {
   const location = useLocation()
   const setCategoryFilter = useFilterStore((s) => s.setCategoryFilter)
   const { pathname } = location
+  // Автосинк цін акцій/крипти (кожні 6 год + при вході/поверненні з фону) —
+  // тут, а не на самих вкладках, щоб спрацьовував незалежно від того, який
+  // розділ відкритий.
+  usePriceAutoSync()
+  // Автогенерація транзакцій з регулярних платежів (+ наздоганяння
+  // пропущених дат) — теж тут, а не на вкладці "Регулярні", щоб
+  // спрацьовувало незалежно від відкритого розділу.
+  useRecurringAutoGenerate()
 
   const isInvestmentsSection = pathname.startsWith('/investments')
   const isSettingsSection = pathname === '/settings' || pathname.startsWith('/settings/')
