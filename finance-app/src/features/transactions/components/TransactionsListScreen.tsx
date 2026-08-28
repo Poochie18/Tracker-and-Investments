@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Trash2, X, Pencil } from 'lucide-react'
+import { Trash2, X, Pencil, Tag } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { useAccounts } from '@/hooks/use-accounts'
 import { useTransactions, useDeleteTransaction } from '@/hooks/use-transactions'
@@ -49,6 +49,7 @@ export function TransactionsListScreen() {
 
   const deleteTransaction = useDeleteTransaction(user?.id ?? '')
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [showCategoryPicker, setShowCategoryPicker] = useState(false)
 
   const grouped = useMemo(() => {
     const map = new Map<string, LocalTransaction[]>()
@@ -96,26 +97,46 @@ export function TransactionsListScreen() {
 
       <PeriodSelector active={selectedPeriod} onChange={setSelectedPeriod} />
 
-      {/* ── Активний фільтр по категорії ─────────────────── */}
-      {activeFilterCategory && (
-        <div className="px-4 pb-2">
+      {/* ── Фільтр по категорії — завжди видима кнопка, не лише коли
+          вже щось обрано (раніше поставити фільтр можна було тільки з
+          "Огляду", тут — лише прибрати вже активний) ─────────────── */}
+      <div className="px-4 pb-2 flex items-center gap-2">
+        <button
+          onClick={() => setShowCategoryPicker(true)}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-full"
+          style={{ backgroundColor: 'var(--color-bg-card)' }}
+        >
+          {activeFilterCategory ? (
+            <>
+              <CategoryIconCircle
+                iconName={activeFilterCategory.icon_name}
+                colorHex={activeFilterCategory.color_hex}
+                size="sm"
+              />
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text-primary)' }}>
+                {activeFilterCategory.name}
+              </span>
+            </>
+          ) : (
+            <>
+              <Tag size={14} style={{ color: 'var(--color-text-secondary)' }} />
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+                Категорія
+              </span>
+            </>
+          )}
+        </button>
+        {activeFilterCategory && (
           <button
             onClick={() => setCategoryFilter(null)}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-full"
-            style={{ backgroundColor: 'var(--color-bg-card)' }}
+            className="p-1.5 rounded-full"
+            aria-label="Прибрати фільтр за категорією"
+            title="Прибрати фільтр"
           >
-            <CategoryIconCircle
-              iconName={activeFilterCategory.icon_name}
-              colorHex={activeFilterCategory.color_hex}
-              size="sm"
-            />
-            <span className="text-xs font-medium" style={{ color: 'var(--color-text-primary)' }}>
-              {activeFilterCategory.name}
-            </span>
             <X size={14} style={{ color: 'var(--color-text-secondary)' }} />
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* ── Список ────────────────────────────────────────── */}
       <div className="flex flex-col gap-3 px-4 pb-4">
@@ -232,6 +253,71 @@ export function TransactionsListScreen() {
           </div>
         ))}
       </div>
+
+      {/* ── Пікер категорії для фільтра ──────────────────── */}
+      {showCategoryPicker && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center">
+          <div
+            className="absolute inset-0"
+            style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
+            onClick={() => setShowCategoryPicker(false)}
+          />
+          <div
+            className="relative w-full max-w-lg rounded-t-3xl p-6 pb-10 flex flex-col gap-4 max-h-[80vh] overflow-y-auto"
+            style={{ backgroundColor: 'var(--color-bg-card)' }}
+          >
+            <p className="text-base font-semibold text-center" style={{ color: 'var(--color-text-primary)' }}>
+              Фільтр за категорією
+            </p>
+
+            {activeFilterCategory && (
+              <button
+                onClick={() => {
+                  setCategoryFilter(null)
+                  setShowCategoryPicker(false)
+                }}
+                className="w-full py-3 rounded-2xl font-semibold text-sm"
+                style={{ backgroundColor: 'rgba(255,255,255,0.08)', color: 'var(--color-text-primary)' }}
+              >
+                Усі категорії
+              </button>
+            )}
+
+            <div className="grid grid-cols-4 gap-3">
+              {categories.map((cat) => {
+                const isSelected = cat.id === categoryFilter
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => {
+                      setCategoryFilter(cat.id)
+                      setShowCategoryPicker(false)
+                    }}
+                    className="flex flex-col items-center gap-1.5"
+                  >
+                    <div
+                      className="rounded-full p-0.5 transition-all"
+                      style={{
+                        outline: isSelected ? `2px solid ${cat.color_hex}` : '2px solid transparent',
+                        outlineOffset: 2,
+                      }}
+                    >
+                      <CategoryIconCircle iconName={cat.icon_name} colorHex={cat.color_hex} size="md" />
+                    </div>
+                    <span
+                      className="text-xs text-center leading-tight line-clamp-2"
+                      style={{ color: isSelected ? 'var(--color-text-primary)' : 'var(--color-text-secondary)' }}
+                    >
+                      {cat.name}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Поп-ап підтвердження видалення ───────────────── */}
       {confirmDeleteId && (
