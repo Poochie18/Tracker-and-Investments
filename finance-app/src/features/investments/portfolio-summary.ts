@@ -140,24 +140,35 @@ export function computePortfolioSummary(
   const amounts: PortfolioSnapshotRow[] = Array.from(byType.entries()).map(([type, v]) => ({ type, ...v }))
   const summary = buildPortfolioSummaryFromAmounts(amounts)
 
-  // Облігації показують дохід окремо від інших типів: не прибуток за
-  // весь строк володіння (він включає ще не отримані майбутні купони),
-  // а лише за поточний фінансовий рік — щоб "Огляд" відповідав на
-  // питання "скільки я заробив/втратив цього року", а не "скільки
-  // всього заробить ця облігація за весь час до погашення". Актуально
-  // тільки для живих даних — зліпок історії вже "заморожений".
+  // Облігації показують дохід і вартість окремо від інших типів: не за
+  // весь строк володіння (currentValue з computeBondTotals включає ще не
+  // отримані майбутні купони й дату погашення, що може бути через роки),
+  // а лише за поточний фінансовий рік — щоб "Огляд" відповідав на питання
+  // "скільки я заробив/втратив цього року і скільки це коштує зараз", а не
+  // "скільки всього поверне ця облігація за весь час до погашення".
+  // currentValue тому перераховуємо як invested + прибуток за поточний
+  // рік (узгоджено з pnl, а не окремо від нього) — і відповідно
+  // перерахувуємо частку в портфелі й підсумки. Актуально тільки для
+  // живих даних — зліпок історії вже "заморожений".
   const bonds = investments.filter((inv) => inv.type === 'bond')
   if (bonds.length === 0) return summary
 
   const currentYearBondProfitUah = getCurrentYearBondProfitUah(bonds, couponDatesByInvestment, lotsByInvestment, fiscalYearStartMonth, rates)
 
-  const rows = summary.rows.map((row) => {
+  const rowsWithBondValue = summary.rows.map((row) => {
     if (row.type !== 'bond') return row
     const pnl = currentYearBondProfitUah
-    return { ...row, pnl, pnlPercent: row.invested === 0 ? 0 : (pnl / row.invested) * 100 }
+    const currentValue = row.invested + pnl
+    return { ...row, currentValue, pnl, pnlPercent: row.invested === 0 ? 0 : (pnl / row.invested) * 100 }
   })
+
+  const totalCurrentValue = rowsWithBondValue.reduce((sum, r) => sum + r.currentValue, 0)
+  const rows = rowsWithBondValue.map((row) => ({
+    ...row,
+    portfolioPercent: totalCurrentValue === 0 ? 0 : (row.currentValue / totalCurrentValue) * 100,
+  }))
   const totalPnl = rows.reduce((sum, r) => sum + r.pnl, 0)
   const totalPnlPercent = summary.totalInvested === 0 ? 0 : (totalPnl / summary.totalInvested) * 100
 
-  return { ...summary, rows, totalPnl, totalPnlPercent }
+  return { ...summary, rows, totalCurrentValue, totalPnl, totalPnlPercent }
 }
