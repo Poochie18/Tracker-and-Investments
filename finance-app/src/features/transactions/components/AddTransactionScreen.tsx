@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { format } from 'date-fns'
 import { ArrowLeft, Check, Calculator, ChevronDown, ChevronUp } from 'lucide-react'
@@ -98,6 +98,12 @@ function TransactionForm({ id, existing, recurringId, existingRecurring, startRe
   const createRecurring = useCreateRecurringPayment(user?.id ?? '')
   const updateRecurring = useUpdateRecurringPayment(user?.id ?? '')
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // Автофокус на полі суми при відкритті форми — щоб одразу можна було
+  // вводити цифри з системної клавіатури, не тапаючи по полю пальцем.
+  useEffect(() => {
+    inputRef.current?.focus()
+  }, [])
 
   // Спільні поля (тип/рахунок/сума/категорія/коментар) заповнюються і зі
   // звичайної транзакції, і з шаблону регулярного платежу — обидва мають

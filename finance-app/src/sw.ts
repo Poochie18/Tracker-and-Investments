@@ -5,13 +5,20 @@
 // Edge Function шле web-push, поки застосунок закритий).
 declare const self: ServiceWorkerGlobalScope
 
-import { precacheAndRoute } from 'workbox-precaching'
-import { registerRoute } from 'workbox-routing'
+import { precacheAndRoute, createHandlerBoundToURL } from 'workbox-precaching'
+import { registerRoute, NavigationRoute } from 'workbox-routing'
 import { NetworkOnly } from 'workbox-strategies'
 
 // Precache статики — той самий globPatterns, що був у workbox.generateSW
 // раніше (vite-plugin-pwa підставляє список файлів у __WB_MANIFEST сам).
 precacheAndRoute(self.__WB_MANIFEST)
+
+// SPA navigation fallback: без цього хард-релоад/пряме відкриття будь-якого
+// клієнтського маршруту (напр. /overview) в офлайні не має що показати —
+// браузер просто не отримає HTML. Віддаємо закешований index.html для
+// будь-якої навігації, а вже react-router на клієнті домальовує потрібний
+// екран. Supabase-запити нижче — не навігації, тому це правило їх не чіпає.
+registerRoute(new NavigationRoute(createHandlerBoundToURL('index.html')))
 
 // Supabase API — ніколи не кешуємо, завжди мережа (як і раніше).
 registerRoute(({ url }) => /^https:\/\/.*\.supabase\.co\/.*/i.test(url.href), new NetworkOnly())

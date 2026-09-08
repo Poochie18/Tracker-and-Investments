@@ -6,7 +6,7 @@ import { useTransactions } from '@/hooks/use-transactions'
 import { useCategories } from '@/hooks/use-categories'
 import { useUIStore } from '@/stores/ui-store'
 import { useFilterStore } from '@/stores/filter-store'
-import { getPeriodRange, formatPeriodHeader } from '@/lib/utils/dates'
+import { getPeriodRange, formatPeriodHeader, shiftPeriodAnchor } from '@/lib/utils/dates'
 import { Money } from '@/lib/utils/money'
 import { ExpenseIncomeTabs } from './ExpenseIncomeTabs'
 import { PeriodSelector } from './PeriodSelector'
@@ -16,6 +16,7 @@ import { CategoryListItem } from './CategoryListItem'
 import { SyncStatusIndicator } from '@/components/SyncStatusIndicator'
 import { AccountIconButton } from '@/components/AccountIconButton'
 import { AccountSwitcher } from '@/components/AccountSwitcher'
+import { SwipeNavigator } from '@/components/SwipeNavigator'
 import type { LocalCategory } from '@/lib/db/schema'
 
 export function OverviewScreen() {
@@ -102,8 +103,14 @@ export function OverviewScreen() {
   const netColor = netAmount >= 0 ? 'var(--color-income)' : 'var(--color-expense)'
   const netPrefix = netAmount >= 0 ? '+' : '−'
 
+  // Свайп вліво/вправо на шапці й пончику — перелистування між сусідніми
+  // періодами (день/тиждень/місяць/рік), як стрілки в PeriodNavigator.
+  const goToNextPeriod = () => setPeriodAnchor(shiftPeriodAnchor(selectedPeriod, periodAnchor, 1))
+  const goToPrevPeriod = () => setPeriodAnchor(shiftPeriodAnchor(selectedPeriod, periodAnchor, -1))
+
   return (
     <div className="flex flex-col min-h-full" style={{ backgroundColor: 'var(--color-bg-primary)' }}>
+     <SwipeNavigator onSwipeLeft={goToNextPeriod} onSwipeRight={goToPrevPeriod}>
       {/* ── Шапка ─────────────────────────────────────────── */}
       <div
         className="px-4 pb-4"
@@ -163,6 +170,7 @@ export function OverviewScreen() {
         centerLabel={tabMoney.formatCompact()}
         centerSublabel={activeTab === 'expense' ? 'витрати' : 'доходи'}
       />
+     </SwipeNavigator>
 
       {/* ── Список категорій ──────────────────────────────── */}
       <div

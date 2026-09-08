@@ -27,6 +27,17 @@ const queryClient = new QueryClient({
     queries: {
       retry: 1,
       staleTime: 1000 * 60,
+      // Дані читаються з локального Dexie (IndexedDB), а не напряму з
+      // мережі — тож запити мають виконуватись і в офлайні. За замовчуванням
+      // React Query ('online') просто зависає в паузі, поки navigator.onLine
+      // === false, і застосунок лишається порожнім навіть з локальними
+      // даними на диску.
+      networkMode: 'always',
+    },
+    mutations: {
+      // Аналогічно — запис у Dexie теж локальна операція, синхронізація з
+      // Supabase відбувається окремо через SyncEngine.
+      networkMode: 'always',
     },
   },
 })
