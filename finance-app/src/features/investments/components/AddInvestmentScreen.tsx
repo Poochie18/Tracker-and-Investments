@@ -159,12 +159,26 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType }: Inve
       return
     }
 
+    // Для облігацій "поточна ціна" завжди дзеркалить ціну купівлі (тримаємо
+    // до погашення за номіналом) — так і задумано. Для акцій — інакше: поле
+    // сховане (тягнеться з Finnhub), але при РЕДАГУВАННІ вже існуючої акції
+    // currentPriceNum і так містить актуальну (можливо, синковану) ціну зі
+    // стану форми — її не можна затирати purchasePriceNum, інакше кожне
+    // збереження форми (напр. зміна назви) скидало б поточну ціну до ціни
+    // купівлі. purchasePriceNum лишається лише запасним варіантом для НОВОЇ
+    // акції (currentPriceNum ще не ініціалізований — NaN).
+    const currentPriceForSave = isBond
+      ? purchasePriceNum
+      : type === 'stock'
+        ? (isNaN(currentPriceNum) ? purchasePriceNum : currentPriceNum)
+        : currentPriceNum
+
     const formData = {
       name: name.trim(),
       type,
       quantity: quantityNum,
       purchasePrice: purchasePriceNum,
-      currentPrice: hidesCurrentPrice ? purchasePriceNum : currentPriceNum,
+      currentPrice: currentPriceForSave,
       currency,
       purchaseDate: new Date(purchaseDate),
       notes: notes.trim() || undefined,

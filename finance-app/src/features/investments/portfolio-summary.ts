@@ -75,7 +75,8 @@ export function computePortfolioSummary(
   depositContributions: LocalDepositContribution[] = [],
   bondCouponDates: LocalBondCouponDate[] = [],
   bondLots: LocalBondLot[] = [],
-  fiscalYearStartMonth: number = getFiscalYearStartMonth()
+  fiscalYearStartMonth: number = getFiscalYearStartMonth(),
+  freeCashUsdMinor: number = 0
 ): PortfolioSummary {
   const byType = new Map<InvestmentType, { invested: number; currentValue: number }>()
 
@@ -135,6 +136,15 @@ export function computePortfolioSummary(
       invested: prev.invested + investedUah,
       currentValue: prev.currentValue + currentUah,
     })
+  }
+
+  // Вільні кошти на брокерському рахунку (акції) — додаємо однаковою сумою
+  // і в invested, і в currentValue типу 'stock', щоб дохід/% типу не
+  // спотворювались готівкою (те саме, що на вкладці "Акції" в InvestmentsScreen).
+  if (freeCashUsdMinor > 0) {
+    const cashUah = convertToUahMinorUnits(freeCashUsdMinor, 'USD', rates)
+    const prev = byType.get('stock') ?? { invested: 0, currentValue: 0 }
+    byType.set('stock', { invested: prev.invested + cashUah, currentValue: prev.currentValue + cashUah })
   }
 
   const amounts: PortfolioSnapshotRow[] = Array.from(byType.entries()).map(([type, v]) => ({ type, ...v }))

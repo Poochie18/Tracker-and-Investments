@@ -24,6 +24,7 @@ import { CryptoSyncButton } from './CryptoSyncButton'
 import { StockSyncButton } from './StockSyncButton'
 import { EditInvestedModal } from './EditInvestedModal'
 import { FreeCashCard } from './FreeCashCard'
+import { useFreeCashUsdMinor } from '@/lib/settings/free-cash'
 import { BondFiscalYearTable } from './BondFiscalYearTable'
 import { PortfolioOverview } from './PortfolioOverview'
 import { computeDepositTotals } from '../deposit-schedule'
@@ -60,6 +61,10 @@ export function InvestmentsScreen() {
   // activeType null лише на "Огляді" (ранній return нижче) — тут завжди
   // конкретний тип; хук викликається безумовно (правила хуків), як і раніше.
   const scaleInvested = useScaleInvestedByType(user?.id ?? '', activeType ?? 'crypto')
+  // Вільні кошти на брокерському рахунку (лише вкладка "Акції") — рахуємо
+  // однаковою сумою і в "Вкладено", і в "Поточну вартість", щоб "Прибуток"
+  // відображав тільки реальний P&L паперів, а не готівку на рахунку.
+  const freeCashUsdMinor = useFreeCashUsdMinor()
 
   // Тут сума рахується без конвертації валют — на вкладці одного типу
   // активи зазвичай в одній валюті (напр. усі акції в USD). Якщо activeType
@@ -131,8 +136,11 @@ export function InvestmentsScreen() {
     if (i.type === 'bond') return sum + bondTotalsById.get(i.id)!.currentValue
     return sum + i.current_price * i.quantity
   }, 0)
-  const invested = Money.fromKopiyky(Math.round(investedTotalRaw))
-  const currentValue = Money.fromKopiyky(Math.round(currentTotalRaw))
+  // Вільні кошти — однаково в обидва підсумки (див. коментар вище), тому
+  // на pnl не впливають, а на "Вкладено"/"Поточну вартість" — впливають.
+  const cashRaw = activeType === 'stock' ? freeCashUsdMinor : 0
+  const invested = Money.fromKopiyky(Math.round(investedTotalRaw) + cashRaw)
+  const currentValue = Money.fromKopiyky(Math.round(currentTotalRaw) + cashRaw)
   const pnl = currentValue.subtract(invested)
   const pnlPercent = invested.isZero() ? 0 : (pnl.toKopiyky() / invested.toKopiyky()) * 100
 

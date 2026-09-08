@@ -6,6 +6,11 @@ import { useSyncContext } from '@/lib/sync/sync-context'
 
 export const investmentKeys = {
   all: (userId: string) => ['investments', userId] as const,
+  // Окремий запис (форма редагування, AddInvestmentScreen) — своя queryKey,
+  // не 'investments'-список, тому мутації нижче мають інвалідовувати ОБИДВІ
+  // (див. коментар у useUpdateInvestment) — інакше форма при повторному
+  // відкритті бачить старе кешоване значення (звідси "ціна відкотилась").
+  detail: (id: string) => ['investment', id] as const,
 }
 
 // Всі активні інвестиції користувача
@@ -19,7 +24,7 @@ export function useInvestments(userId: string | undefined) {
 
 export function useInvestment(id: string | undefined) {
   return useQuery({
-    queryKey: ['investment', id],
+    queryKey: investmentKeys.detail(id ?? ''),
     queryFn: () => investmentsRepo.getById(id!),
     enabled: !!id,
   })
@@ -48,8 +53,13 @@ export function useUpdateInvestment(userId: string) {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: InvestmentFormData }) =>
       investmentsRepo.update(id, data),
-    onSuccess: () => {
+    // Інвалідовуємо і список ('investments'), і окремий запис ('investment',
+    // id) — форма редагування (useInvestment) тримає СВІЙ кеш, без цього
+    // при повторному відкритті форми показувались би дані на момент першого
+    // відкриття (звідси баг "ціна відкочується до створення картки").
+    onSuccess: (_data, { id }) => {
       void queryClient.invalidateQueries({ queryKey: investmentKeys.all(userId) })
+      void queryClient.invalidateQueries({ queryKey: investmentKeys.detail(id) })
       triggerSync()
     },
   })
@@ -62,8 +72,9 @@ export function useUpdateInvestmentPrice(userId: string) {
   return useMutation({
     mutationFn: ({ id, currentPrice }: { id: string; currentPrice: number }) =>
       investmentsRepo.updateCurrentPrice(id, currentPrice),
-    onSuccess: () => {
+    onSuccess: (_data, { id }) => {
       void queryClient.invalidateQueries({ queryKey: investmentKeys.all(userId) })
+      void queryClient.invalidateQueries({ queryKey: investmentKeys.detail(id) })
       triggerSync()
     },
   })
@@ -80,6 +91,9 @@ export function useScaleInvestedByType(userId: string, type: InvestmentType) {
     mutationFn: (newTotalUnits: number) => investmentsRepo.scaleInvestedByType(userId, type, newTotalUnits),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: investmentKeys.all(userId) })
+      // Торкається N рядків одразу (конкретні id наперед невідомі) — б'ємо
+      // по всьому префіксу 'investment', а не по одному detail(id).
+      void queryClient.invalidateQueries({ queryKey: ['investment'] })
       triggerSync()
     },
   })
@@ -94,8 +108,9 @@ export function useBuyMoreStock(userId: string) {
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: { date: string; quantity: number; price: number } }) =>
       investmentsRepo.buyMoreStock(id, input),
-    onSuccess: () => {
+    onSuccess: (_data, { id }) => {
       void queryClient.invalidateQueries({ queryKey: investmentKeys.all(userId) })
+      void queryClient.invalidateQueries({ queryKey: investmentKeys.detail(id) })
       triggerSync()
     },
   })
@@ -107,8 +122,9 @@ export function useDeleteInvestment(userId: string) {
 
   return useMutation({
     mutationFn: (id: string) => investmentsRepo.softDelete(id),
-    onSuccess: () => {
+    onSuccess: (_data, id) => {
       void queryClient.invalidateQueries({ queryKey: investmentKeys.all(userId) })
+      void queryClient.invalidateQueries({ queryKey: investmentKeys.detail(id) })
       triggerSync()
     },
   })
