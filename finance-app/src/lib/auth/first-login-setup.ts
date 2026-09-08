@@ -51,9 +51,13 @@ export async function deduplicateCategories(userId: string): Promise<number> {
 }
 
 export async function isFirstLogin(userId: string): Promise<boolean> {
-  // Локальний режим (dev офлайн / гість / світч "локально") — перевіряємо
-  // тільки локальну Dexie, без Supabase.
-  if (isLocalOnly(userId)) {
+  // Локальний режим (dev офлайн / гість / світч "локально") АБО реальний
+  // юзер, що відкрив застосунок без інтернету — перевіряємо тільки локальну
+  // Dexie, без Supabase. Інакше звичайний користувач, який уже все
+  // налаштував раніше, застрягав би на "Налаштовуємо профіль..." щоразу,
+  // коли відкриває застосунок офлайн (мережевий запит нижче просто не
+  // проходить, а локальні дані вже давно є на диску).
+  if (isLocalOnly(userId) || !navigator.onLine) {
     const localCount = await db.accounts.where('user_id').equals(userId).count()
     return localCount === 0
   }
@@ -76,7 +80,11 @@ export async function isFirstLogin(userId: string): Promise<boolean> {
 // пропускаються, а записи одразу створюються локально зі статусом 'pending' —
 // вони підуть на сервер, коли синк-двигун знову ввімкнеться.
 export async function setupFirstLogin(userId: string): Promise<void> {
-  const offline = isLocalOnly(userId)
+  // Так само як в isFirstLogin — реальний юзер без інтернету (напр. зовсім
+  // новий акаунт, відкритий уперше офлайн) отримує рахунок/категорії
+  // локально зі статусом 'pending', і вони підуть на сервер, коли зв'язок
+  // відновиться (SyncEngine).
+  const offline = isLocalOnly(userId) || !navigator.onLine
 
   // Другий захист: якщо категорії вже є в Supabase — хтось встиг створити їх раніше
   if (!offline) {

@@ -11,8 +11,24 @@ export function AuthGuard() {
   const { user, loading } = useAuth()
   const [setupDone, setSetupDone] = useState(false)
   const [setupError, setSetupError] = useState<string | null>(null)
+  // Зростає при кожній повторній спробі — включений у deps ефекту нижче,
+  // щоб можна було перезапустити сетап без переходу на новий user.
+  const [retryTick, setRetryTick] = useState(0)
   // Захист від подвійного запуску (React StrictMode монтує ефекти двічі)
   const setupStarted = useRef(false)
+
+  // Якщо сетап впав через офлайн — авто-ретрай, щойно з'явиться мережа,
+  // замість того щоб змушувати користувача тицяти "Спробувати знову".
+  useEffect(() => {
+    if (!setupError) return
+    const onOnline = () => {
+      setupStarted.current = false
+      setSetupError(null)
+      setRetryTick((t) => t + 1)
+    }
+    window.addEventListener('online', onOnline)
+    return () => window.removeEventListener('online', onOnline)
+  }, [setupError])
 
   useEffect(() => {
     if (!user || setupStarted.current) return
@@ -46,7 +62,7 @@ export function AuthGuard() {
         setupStarted.current = false // дозволяємо повторну спробу при помилці
         setSetupError(err instanceof Error ? err.message : 'Помилка ініціалізації')
       })
-  }, [user])
+  }, [user, retryTick])
 
   if (loading) return <SplashScreen message="Завантаження..." />
   if (!user) return <Navigate to="/login" replace />

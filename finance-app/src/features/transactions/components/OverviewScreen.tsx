@@ -110,7 +110,6 @@ export function OverviewScreen() {
 
   return (
     <div className="flex flex-col min-h-full" style={{ backgroundColor: 'var(--color-bg-primary)' }}>
-     <SwipeNavigator onSwipeLeft={goToNextPeriod} onSwipeRight={goToPrevPeriod}>
       {/* ── Шапка ─────────────────────────────────────────── */}
       <div
         className="px-4 pb-4"
@@ -164,46 +163,48 @@ export function OverviewScreen() {
       {/* ── Селектор періоду ──────────────────────────────── */}
       <PeriodSelector active={selectedPeriod} onChange={setSelectedPeriod} />
 
-      {/* ── Пончик ────────────────────────────────────────── */}
-      <DonutChart
-        data={donutData}
-        centerLabel={tabMoney.formatCompact()}
-        centerSublabel={activeTab === 'expense' ? 'витрати' : 'доходи'}
-      />
-     </SwipeNavigator>
+      {/* ── Пончик + список категорій ─────────────────────────
+          Свайп рухає тільки цю частину — шапка з балансом і селектор
+          періоду лишаються на місці, щоб не "стрибали" при жесті. */}
+      <SwipeNavigator onSwipeLeft={goToNextPeriod} onSwipeRight={goToPrevPeriod}>
+        <DonutChart
+          data={donutData}
+          centerLabel={tabMoney.formatCompact()}
+          centerSublabel={activeTab === 'expense' ? 'витрати' : 'доходи'}
+        />
 
-      {/* ── Список категорій ──────────────────────────────── */}
-      <div
-        className="mx-4 rounded-2xl overflow-hidden mb-4"
-        style={{ backgroundColor: 'var(--color-bg-card)' }}
-      >
-        {categoryTotals.length === 0 ? (
-          <p
-            className="text-center text-sm py-8"
-            style={{ color: 'var(--color-text-secondary)' }}
-          >
-            Транзакцій за цей період немає.{'\n'}
-            Натисни «+» щоб додати першу.
-          </p>
-        ) : (
-          categoryTotals.map((g, i) => (
-            <div key={g.category.id}>
-              <CategoryListItem
-                category={g.category}
-                amount={g.amount}
-                percentage={g.percentage}
-                onPress={() => handleCategoryPress(g.category.id)}
-              />
-              {i < categoryTotals.length - 1 && (
-                <div
-                  className="mx-4"
-                  style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.05)' }}
+        <div
+          className="mx-4 rounded-2xl overflow-hidden mb-4"
+          style={{ backgroundColor: 'var(--color-bg-card)' }}
+        >
+          {categoryTotals.length === 0 ? (
+            <p
+              className="text-center text-sm py-8"
+              style={{ color: 'var(--color-text-secondary)' }}
+            >
+              Транзакцій за цей період немає.{'\n'}
+              Натисни «+» щоб додати першу.
+            </p>
+          ) : (
+            categoryTotals.map((g, i) => (
+              <div key={g.category.id}>
+                <CategoryListItem
+                  category={g.category}
+                  amount={g.amount}
+                  percentage={g.percentage}
+                  onPress={() => handleCategoryPress(g.category.id)}
                 />
-              )}
-            </div>
-          ))
-        )}
-      </div>
+                {i < categoryTotals.length - 1 && (
+                  <div
+                    className="mx-4"
+                    style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.05)' }}
+                  />
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </SwipeNavigator>
     </div>
   )
 }
