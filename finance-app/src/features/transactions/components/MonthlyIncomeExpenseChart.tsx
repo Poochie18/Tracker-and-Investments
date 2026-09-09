@@ -3,6 +3,7 @@ import {
   ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid,
 } from 'recharts'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { DeferredChart } from '@/components/DeferredChart'
 import { useAuth } from '@/hooks/use-auth'
 import { useTransactions } from '@/hooks/use-transactions'
 import { Money } from '@/lib/utils/money'
@@ -109,39 +110,43 @@ export function MonthlyIncomeExpenseChart() {
         </button>
       </div>
 
-      <ResponsiveContainer width="100%" height={300}>
-        <ComposedChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" vertical={false} />
-          <XAxis
-            dataKey="month"
-            tick={{ fill: 'var(--color-text-secondary)', fontSize: 11 }}
-            axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
-            tickLine={false}
-          />
-          <YAxis
-            tick={{ fill: 'var(--color-text-secondary)', fontSize: 10 }}
-            axisLine={false}
-            tickLine={false}
-            width={40}
-            tickFormatter={(v: number) => `${Math.round(v / 100000)}k`}
-          />
-          <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
-          <Legend
-            formatter={(value: string) => SERIES_LABELS[value] ?? value}
-            wrapperStyle={{ fontSize: 11 }}
-          />
-          <Bar dataKey="income" name="income" fill={COLOR_INCOME} radius={[4, 4, 0, 0]} maxBarSize={14} />
-          <Bar dataKey="expense" name="expense" fill={COLOR_EXPENSE} radius={[4, 4, 0, 0]} maxBarSize={14} />
-          <Line
-            dataKey="profit"
-            name="profit"
-            type="monotone"
-            stroke={COLOR_PROFIT}
-            strokeWidth={2}
-            dot={{ r: 3, fill: COLOR_PROFIT }}
-          />
-        </ComposedChart>
-      </ResponsiveContainer>
+      <div style={{ height: 300 }}>
+        <DeferredChart>
+          <ResponsiveContainer width="100%" height={300}>
+            <ComposedChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" vertical={false} />
+              <XAxis
+                dataKey="month"
+                tick={{ fill: 'var(--color-text-secondary)', fontSize: 11 }}
+                axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+                tickLine={false}
+              />
+              <YAxis
+                tick={{ fill: 'var(--color-text-secondary)', fontSize: 10 }}
+                axisLine={false}
+                tickLine={false}
+                width={40}
+                tickFormatter={(v: number) => `${Math.round(v / 100000)}k`}
+              />
+              <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+              <Legend
+                formatter={(value: string) => SERIES_LABELS[value] ?? value}
+                wrapperStyle={{ fontSize: 11 }}
+              />
+              <Bar dataKey="income" name="income" fill={COLOR_INCOME} radius={[4, 4, 0, 0]} maxBarSize={14} />
+              <Bar dataKey="expense" name="expense" fill={COLOR_EXPENSE} radius={[4, 4, 0, 0]} maxBarSize={14} />
+              <Line
+                dataKey="profit"
+                name="profit"
+                type="monotone"
+                stroke={COLOR_PROFIT}
+                strokeWidth={2}
+                dot={{ r: 3, fill: COLOR_PROFIT }}
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </DeferredChart>
+      </div>
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import {
   ComposedChart, Bar, Line, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts'
+import { DeferredChart } from '@/components/DeferredChart'
 import { convertFromUahMinorUnits, type ExchangeRates } from '@/lib/investments/exchange-rate'
 import type { PortfolioSummary } from '../portfolio-summary'
 import type { DisplayCurrency } from './CurrencySwitch'
@@ -53,48 +54,52 @@ export function PortfolioPerformanceChart({ summary, displayCurrency, rates }: P
       <p className="text-xs font-medium px-4 mb-1" style={{ color: 'var(--color-text-secondary)' }}>
         Поточна вартість і дохідність по типах
       </p>
-      <ResponsiveContainer width="100%" height={260}>
-        <ComposedChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" vertical={false} />
-          <XAxis
-            dataKey="label"
-            tick={{ fill: 'var(--color-text-secondary)', fontSize: 11 }}
-            axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
-            tickLine={false}
-          />
-          <YAxis
-            yAxisId="value"
-            tick={{ fill: 'var(--color-text-secondary)', fontSize: 10 }}
-            axisLine={false}
-            tickLine={false}
-            width={40}
-            tickFormatter={(v: number) => `${symbol}${(v / 1000).toFixed(0)}k`}
-          />
-          <YAxis
-            yAxisId="percent"
-            orientation="right"
-            tick={{ fill: 'var(--color-text-secondary)', fontSize: 10 }}
-            axisLine={false}
-            tickLine={false}
-            width={36}
-            tickFormatter={(v: number) => `${v}%`}
-          />
-          <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
-          <Bar yAxisId="value" dataKey="currentValueDisplay" radius={[6, 6, 0, 0]} maxBarSize={48}>
-            {data.map((d, i) => (
-              <Cell key={i} fill={d.colorHex} />
-            ))}
-          </Bar>
-          <Line
-            yAxisId="percent"
-            type="monotone"
-            dataKey="pnlPercent"
-            stroke="#4A90E2"
-            strokeWidth={2}
-            dot={{ r: 4, fill: '#4A90E2' }}
-          />
-        </ComposedChart>
-      </ResponsiveContainer>
+      <div style={{ height: 260 }}>
+        <DeferredChart>
+          <ResponsiveContainer width="100%" height={260}>
+            <ComposedChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" vertical={false} />
+              <XAxis
+                dataKey="label"
+                tick={{ fill: 'var(--color-text-secondary)', fontSize: 11 }}
+                axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+                tickLine={false}
+              />
+              <YAxis
+                yAxisId="value"
+                tick={{ fill: 'var(--color-text-secondary)', fontSize: 10 }}
+                axisLine={false}
+                tickLine={false}
+                width={40}
+                tickFormatter={(v: number) => `${symbol}${(v / 1000).toFixed(0)}k`}
+              />
+              <YAxis
+                yAxisId="percent"
+                orientation="right"
+                tick={{ fill: 'var(--color-text-secondary)', fontSize: 10 }}
+                axisLine={false}
+                tickLine={false}
+                width={36}
+                tickFormatter={(v: number) => `${v}%`}
+              />
+              <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+              <Bar yAxisId="value" dataKey="currentValueDisplay" radius={[6, 6, 0, 0]} maxBarSize={48}>
+                {data.map((d, i) => (
+                  <Cell key={i} fill={d.colorHex} />
+                ))}
+              </Bar>
+              <Line
+                yAxisId="percent"
+                type="monotone"
+                dataKey="pnlPercent"
+                stroke="#4A90E2"
+                strokeWidth={2}
+                dot={{ r: 4, fill: '#4A90E2' }}
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </DeferredChart>
+      </div>
     </div>
   )
 }
