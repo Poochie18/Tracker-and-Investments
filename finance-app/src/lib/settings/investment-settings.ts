@@ -4,10 +4,11 @@ import { isLocalOnly } from '@/lib/auth/local-mode'
 
 // ============================================================
 // "Вільні кошти" (готівка на брокерському рахунку) і ручне "Вкладено"
-// на вкладці "Акції" — два скалярних налаштування на користувача.
+// на вкладках "Акції"/"Крипта" — три скалярних налаштування на користувача.
 //
 // РАНІШЕ жили лише в localStorage (пристрій-специфічно, без реального
-// збереження в БД) — звідси скарги "поле збивається". Тепер — реальний
+// збереження в БД) або виводились із purchase_price активів (крипта,
+// scaleInvestedByType) — звідси скарги "поле збивається". Тепер — реальний
 // рядок у Supabase (user_investment_settings, міграція 014), з
 // localStorage лише як офлайн-кеш для миттєвого читання/офлайн-режиму.
 //
@@ -20,9 +21,14 @@ import { isLocalOnly } from '@/lib/auth/local-mode'
 interface InvestmentSettings {
   freeCashUsdMinor: number
   stockManualInvestedUsdMinor: number
+  cryptoManualInvestedUsdMinor: number
 }
 
-const DEFAULTS: InvestmentSettings = { freeCashUsdMinor: 0, stockManualInvestedUsdMinor: 0 }
+const DEFAULTS: InvestmentSettings = {
+  freeCashUsdMinor: 0,
+  stockManualInvestedUsdMinor: 0,
+  cryptoManualInvestedUsdMinor: 0,
+}
 
 const cacheKey = (userId: string) => `investment_settings_cache_${userId}`
 
@@ -43,6 +49,9 @@ function readCache(userId: string): InvestmentSettings {
       freeCashUsdMinor: Number.isFinite(parsed.freeCashUsdMinor) ? parsed.freeCashUsdMinor! : 0,
       stockManualInvestedUsdMinor: Number.isFinite(parsed.stockManualInvestedUsdMinor)
         ? parsed.stockManualInvestedUsdMinor!
+        : 0,
+      cryptoManualInvestedUsdMinor: Number.isFinite(parsed.cryptoManualInvestedUsdMinor)
+        ? parsed.cryptoManualInvestedUsdMinor!
         : 0,
     }
   } catch {
@@ -85,6 +94,7 @@ async function set(userId: string, patch: Partial<InvestmentSettings>): Promise<
     user_id: userId,
     free_cash_usd_minor: next.freeCashUsdMinor,
     stock_manual_invested_usd_minor: next.stockManualInvestedUsdMinor,
+    crypto_manual_invested_usd_minor: next.cryptoManualInvestedUsdMinor,
   })
   // Best-effort: якщо офлайн/помилка — значення лишається коректним
   // локально (localStorage-кеш вище), наступний виклик set() чи
@@ -102,6 +112,10 @@ export function setStockManualInvestedUsdMinor(userId: string, minorUnits: numbe
   return set(userId, { stockManualInvestedUsdMinor: Math.max(0, Math.round(minorUnits)) })
 }
 
+export function setCryptoManualInvestedUsdMinor(userId: string, minorUnits: number): Promise<void> {
+  return set(userId, { cryptoManualInvestedUsdMinor: Math.max(0, Math.round(minorUnits)) })
+}
+
 // Підтягує актуальний рядок з Supabase (напр. значення змінили з іншого
 // пристрою) — викликається один раз при вході на вкладку "Акції"/"Огляд"
 // (InvestmentsScreen). Не критично, якщо не викликати — localStorage-кеш
@@ -111,7 +125,7 @@ export async function pullInvestmentSettings(userId: string): Promise<void> {
 
   const { data, error } = await supabase
     .from('user_investment_settings')
-    .select('free_cash_usd_minor, stock_manual_invested_usd_minor')
+    .select('free_cash_usd_minor, stock_manual_invested_usd_minor, crypto_manual_invested_usd_minor')
     .eq('user_id', userId)
     .maybeSingle()
 
@@ -120,6 +134,7 @@ export async function pullInvestmentSettings(userId: string): Promise<void> {
   cached = {
     freeCashUsdMinor: data.free_cash_usd_minor ?? 0,
     stockManualInvestedUsdMinor: data.stock_manual_invested_usd_minor ?? 0,
+    cryptoManualInvestedUsdMinor: data.crypto_manual_invested_usd_minor ?? 0,
   }
   cachedUserId = userId
   writeCache(userId, cached)
@@ -142,4 +157,8 @@ export function useFreeCashUsdMinor(userId: string): number {
 
 export function useStockManualInvestedUsdMinor(userId: string): number {
   return useInvestmentSettings(userId).stockManualInvestedUsdMinor
+}
+
+export function useCryptoManualInvestedUsdMinor(userId: string): number {
+  return useInvestmentSettings(userId).cryptoManualInvestedUsdMinor
 }

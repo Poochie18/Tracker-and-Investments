@@ -4,7 +4,7 @@ import { format } from 'date-fns'
 import { uk } from 'date-fns/locale'
 import { TrendingUp, ChevronDown, ChevronUp, KeyRound, ChevronRight } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
-import { useInvestments, useScaleInvestedByType } from '@/hooks/use-investments'
+import { useInvestments } from '@/hooks/use-investments'
 import { useBinanceConnectionStatus, useCleanupOrphanedCryptoSync } from '@/hooks/use-crypto-exchange'
 import { useExchangeRates } from '@/hooks/use-exchange-rates'
 import { useAllDepositContributions } from '@/hooks/use-deposit-contributions'
@@ -27,7 +27,9 @@ import { FreeCashCard } from './FreeCashCard'
 import {
   useFreeCashUsdMinor,
   useStockManualInvestedUsdMinor,
+  useCryptoManualInvestedUsdMinor,
   setStockManualInvestedUsdMinor,
+  setCryptoManualInvestedUsdMinor,
   pullInvestmentSettings,
 } from '@/lib/settings/investment-settings'
 import { BondFiscalYearTable } from './BondFiscalYearTable'
@@ -63,19 +65,17 @@ export function InvestmentsScreen() {
   useCleanupOrphanedCryptoSync(user?.id, activeType === 'crypto')
   const [showDust, setShowDust] = useState(false)
   const [showEditInvested, setShowEditInvested] = useState(false)
-  // activeType null лише на "Огляді" (ранній return нижче) — тут завжди
-  // конкретний тип; хук викликається безумовно (правила хуків), як і раніше.
-  const scaleInvested = useScaleInvestedByType(user?.id ?? '', activeType ?? 'crypto')
   // Вільні кошти на брокерському рахунку (лише вкладка "Акції") — рахуємо
   // однаковою сумою і в "Вкладено", і в "Поточну вартість", щоб "Прибуток"
   // відображав тільки реальний P&L паперів, а не готівку на рахунку.
   const freeCashUsdMinor = useFreeCashUsdMinor(user?.id ?? '')
-  // "Вкладено" на вкладці "Акції" — більше не похідне від purchase_price*
-  // quantity (та сума тепер окрема плитка "Ціна купівлі"), а введене вручну
-  // число: скільки власних коштів реально внесено. Прибуток/збиток тепер
-  // рахується саме від нього (Поточна вартість − Вкладено).
+  // "Вкладено" на вкладках "Акції"/"Крипта" — більше не похідне від
+  // purchase_price*quantity (та сума тепер окрема плитка "Ціна купівлі"), а
+  // введене вручну число: скільки власних коштів реально внесено. Прибуток/
+  // збиток тепер рахується саме від нього (Поточна вартість − Вкладено).
   const stockManualInvestedUsdMinor = useStockManualInvestedUsdMinor(user?.id ?? '')
-  // Обидва значення вище кешуються в localStorage миттєво (useSyncExternalStore),
+  const cryptoManualInvestedUsdMinor = useCryptoManualInvestedUsdMinor(user?.id ?? '')
+  // Усі три значення вище кешуються в localStorage миттєво (useSyncExternalStore),
   // але реальне джерело правди — Supabase (investment-settings.ts) — тому
   // при вході на вкладку раз підтягуємо актуальний рядок (напр. якщо
   // редагували з іншого пристрою).
@@ -156,18 +156,22 @@ export function InvestmentsScreen() {
   // Вільні кошти — однаково в обидва підсумки (див. коментар вище), тому
   // на pnl не впливають, а на "Вкладено"/"Поточну вартість" — впливають.
   const cashRaw = activeType === 'stock' ? freeCashUsdMinor : 0
-  // На "Акціях" "Вкладено" — ручне число (див. коментар при виклику хука
-  // вище), а собівартість паперів (кількість × ціна купівлі, БЕЗ готівки)
-  // виводиться окремою плиткою "Ціна купівлі" (лише інформаційно). Сам
-  // Прибуток/збиток рахуємо як Поточна вартість - Вкладено (тобто від
+  // На "Акціях"/"Крипті" "Вкладено" — ручне число (див. коментар при виклику
+  // хуків вище), а собівартість паперів/монет (кількість × ціна купівлі, БЕЗ
+  // готівки) виводиться окремою плиткою "Ціна купівлі" (лише інформаційно).
+  // Сам Прибуток/збиток рахуємо як Поточна вартість - Вкладено (тобто від
   // ручного "Вкладено" — так користувач бачить реальний P&L відносно
   // власних внесків, а не собівартості за угодами).
   const costBasis =
-    activeType === 'stock' ? Money.fromKopiyky(Math.round(investedTotalRaw)) : undefined
+    activeType === 'stock' || activeType === 'crypto'
+      ? Money.fromKopiyky(Math.round(investedTotalRaw))
+      : undefined
   const invested =
     activeType === 'stock'
       ? Money.fromKopiyky(stockManualInvestedUsdMinor)
-      : Money.fromKopiyky(Math.round(investedTotalRaw) + cashRaw)
+      : activeType === 'crypto'
+        ? Money.fromKopiyky(cryptoManualInvestedUsdMinor)
+        : Money.fromKopiyky(Math.round(investedTotalRaw) + cashRaw)
   const currentValue = Money.fromKopiyky(Math.round(currentTotalRaw) + cashRaw)
   const pnl = currentValue.subtract(invested)
   const pnlPercent = invested.isZero() ? 0 : (pnl.toKopiyky() / invested.toKopiyky()) * 100
@@ -405,11 +409,11 @@ export function InvestmentsScreen() {
 
       {showEditInvested && (
         <EditInvestedModal
-          title={activeType === 'stock' ? 'Скільки власних коштів вкладено в акції' : 'Скільки всього вкладено в крипту'}
+          title={activeType === 'stock' ? 'Скільки власних коштів вкладено в акції' : 'Скільки власних коштів вкладено в крипту'}
           description={
             activeType === 'stock'
               ? 'Скільки власних коштів реально внесено на купівлю акцій. На "Ціну купівлі" (собівартість за угодами) не впливає, але від цього числа рахується "Прибуток/збиток" (Поточна вартість − Вкладено).'
-              : 'Кількість і поточну ціну кожної монети веде синк з Binance — тут можна підправити лише загальну собівартість (у $). Значення розподілиться пропорційно по всіх монетах.'
+              : 'Скільки власних коштів реально внесено на купівлю крипти. На "Ціну купівлі" (собівартість монет) не впливає, але від цього числа рахується "Прибуток/збиток" (Поточна вартість − Вкладено).'
           }
           currentInvested={invested}
           onClose={() => setShowEditInvested(false)}
@@ -418,7 +422,7 @@ export function InvestmentsScreen() {
               await setStockManualInvestedUsdMinor(user?.id ?? '', newTotalUnits)
               return
             }
-            await scaleInvested.mutateAsync(newTotalUnits)
+            await setCryptoManualInvestedUsdMinor(user?.id ?? '', newTotalUnits)
           }}
         />
       )}

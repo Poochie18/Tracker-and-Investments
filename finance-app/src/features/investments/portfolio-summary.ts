@@ -76,7 +76,13 @@ export function computePortfolioSummary(
   bondCouponDates: LocalBondCouponDate[] = [],
   bondLots: LocalBondLot[] = [],
   fiscalYearStartMonth: number = getFiscalYearStartMonth(),
-  freeCashUsdMinor: number = 0
+  freeCashUsdMinor: number = 0,
+  // Ручне "Вкладено" (investment-settings.ts) для Акцій/Крипти — те саме
+  // число, що редагується пенсілом на вкладці "Акції"/"Крипта" і замінює
+  // там суму собівартості. Підмінюємо ним і тут (0 = не задано, рахуємо
+  // як раніше з собівартості), щоб П&Л на "Огляді" збігався з вкладками.
+  stockManualInvestedUsdMinor: number = 0,
+  cryptoManualInvestedUsdMinor: number = 0
 ): PortfolioSummary {
   const byType = new Map<InvestmentType, { invested: number; currentValue: number }>()
 
@@ -145,6 +151,21 @@ export function computePortfolioSummary(
     const cashUah = convertToUahMinorUnits(freeCashUsdMinor, 'USD', rates)
     const prev = byType.get('stock') ?? { invested: 0, currentValue: 0 }
     byType.set('stock', { invested: prev.invested + cashUah, currentValue: prev.currentValue + cashUah })
+  }
+
+  // Ручне "Вкладено" підміняє суму собівартості для типу повністю (не
+  // додається до неї) — currentValue лишається реальним (уже включає
+  // вільні кошти для акцій, з блоку вище). Той самий підхід, що на
+  // вкладці "Акції"/"Крипта" (InvestmentsScreen).
+  if (stockManualInvestedUsdMinor > 0) {
+    const manualUah = convertToUahMinorUnits(stockManualInvestedUsdMinor, 'USD', rates)
+    const prev = byType.get('stock') ?? { invested: 0, currentValue: 0 }
+    byType.set('stock', { invested: manualUah, currentValue: prev.currentValue })
+  }
+  if (cryptoManualInvestedUsdMinor > 0) {
+    const manualUah = convertToUahMinorUnits(cryptoManualInvestedUsdMinor, 'USD', rates)
+    const prev = byType.get('crypto') ?? { invested: 0, currentValue: 0 }
+    byType.set('crypto', { invested: manualUah, currentValue: prev.currentValue })
   }
 
   const amounts: PortfolioSnapshotRow[] = Array.from(byType.entries()).map(([type, v]) => ({ type, ...v }))

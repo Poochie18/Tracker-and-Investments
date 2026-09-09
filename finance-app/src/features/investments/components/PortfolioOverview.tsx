@@ -9,7 +9,11 @@ import { useAllBondCouponDates } from '@/hooks/use-bond-coupon-dates'
 import { useAllBondLots } from '@/hooks/use-bond-lots'
 import { usePortfolioSnapshots } from '@/hooks/use-portfolio-snapshots'
 import { useFiscalYearStartMonth } from '@/lib/settings/fiscal-year'
-import { useFreeCashUsdMinor } from '@/lib/settings/investment-settings'
+import {
+  useFreeCashUsdMinor,
+  useStockManualInvestedUsdMinor,
+  useCryptoManualInvestedUsdMinor,
+} from '@/lib/settings/investment-settings'
 import { computePortfolioSummary, buildPortfolioSummaryFromAmounts, type PortfolioSummary } from '../portfolio-summary'
 import { useAutoPortfolioSnapshot } from '../use-auto-portfolio-snapshot'
 import { CurrencySwitch, type DisplayCurrency } from './CurrencySwitch'
@@ -50,6 +54,8 @@ export function PortfolioOverview({ investments, rates, isLoading }: PortfolioOv
   const { data: snapshots = [] } = usePortfolioSnapshots(user?.id)
   const fiscalYearStartMonth = useFiscalYearStartMonth()
   const freeCashUsdMinor = useFreeCashUsdMinor(user?.id ?? '')
+  const stockManualInvestedUsdMinor = useStockManualInvestedUsdMinor(user?.id ?? '')
+  const cryptoManualInvestedUsdMinor = useCryptoManualInvestedUsdMinor(user?.id ?? '')
 
   const liveSummary = useMemo(
     () =>
@@ -61,10 +67,22 @@ export function PortfolioOverview({ investments, rates, isLoading }: PortfolioOv
             bondCouponDates,
             bondLots,
             fiscalYearStartMonth,
-            freeCashUsdMinor
+            freeCashUsdMinor,
+            stockManualInvestedUsdMinor,
+            cryptoManualInvestedUsdMinor
           )
         : null,
-    [investments, rates, depositContributions, bondCouponDates, bondLots, fiscalYearStartMonth, freeCashUsdMinor]
+    [
+      investments,
+      rates,
+      depositContributions,
+      bondCouponDates,
+      bondLots,
+      fiscalYearStartMonth,
+      freeCashUsdMinor,
+      stockManualInvestedUsdMinor,
+      cryptoManualInvestedUsdMinor,
+    ]
   )
 
   // Найкращий момент зафіксувати зліпок минулого року — коли є свіжі живі
