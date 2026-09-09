@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { format } from 'date-fns'
 import { uk } from 'date-fns/locale'
@@ -24,8 +24,12 @@ import { CryptoSyncButton } from './CryptoSyncButton'
 import { StockSyncButton } from './StockSyncButton'
 import { EditInvestedModal } from './EditInvestedModal'
 import { FreeCashCard } from './FreeCashCard'
-import { useFreeCashUsdMinor } from '@/lib/settings/free-cash'
-import { useStockManualInvestedUsdMinor, setStockManualInvestedUsdMinor } from '@/lib/settings/stock-manual-invested'
+import {
+  useFreeCashUsdMinor,
+  useStockManualInvestedUsdMinor,
+  setStockManualInvestedUsdMinor,
+  pullInvestmentSettings,
+} from '@/lib/settings/investment-settings'
 import { BondFiscalYearTable } from './BondFiscalYearTable'
 import { PortfolioOverview } from './PortfolioOverview'
 import { computeDepositTotals } from '../deposit-schedule'
@@ -65,12 +69,19 @@ export function InvestmentsScreen() {
   // Вільні кошти на брокерському рахунку (лише вкладка "Акції") — рахуємо
   // однаковою сумою і в "Вкладено", і в "Поточну вартість", щоб "Прибуток"
   // відображав тільки реальний P&L паперів, а не готівку на рахунку.
-  const freeCashUsdMinor = useFreeCashUsdMinor()
+  const freeCashUsdMinor = useFreeCashUsdMinor(user?.id ?? '')
   // "Вкладено" на вкладці "Акції" — більше не похідне від purchase_price*
-  // quantity (та сума тепер "Ціна купівлі"), а введене вручну число: скільки
-  // власних коштів реально внесено. Ні на "Поточну вартість", ні на
-  // "Прибуток" не впливає — суто інформаційна плитка.
-  const stockManualInvestedUsdMinor = useStockManualInvestedUsdMinor()
+  // quantity (та сума тепер окрема плитка "Ціна купівлі"), а введене вручну
+  // число: скільки власних коштів реально внесено. Прибуток/збиток тепер
+  // рахується саме від нього (Поточна вартість − Вкладено).
+  const stockManualInvestedUsdMinor = useStockManualInvestedUsdMinor(user?.id ?? '')
+  // Обидва значення вище кешуються в localStorage миттєво (useSyncExternalStore),
+  // але реальне джерело правди — Supabase (investment-settings.ts) — тому
+  // при вході на вкладку раз підтягуємо актуальний рядок (напр. якщо
+  // редагували з іншого пристрою).
+  useEffect(() => {
+    if (user?.id) void pullInvestmentSettings(user.id)
+  }, [user?.id])
 
   // Тут сума рахується без конвертації валют — на вкладці одного типу
   // активи зазвичай в одній валюті (напр. усі акції в USD). Якщо activeType
@@ -147,11 +158,10 @@ export function InvestmentsScreen() {
   const cashRaw = activeType === 'stock' ? freeCashUsdMinor : 0
   // На "Акціях" "Вкладено" — ручне число (див. коментар при виклику хука
   // вище), а собівартість паперів (кількість × ціна купівлі, БЕЗ готівки)
-  // виводиться окремою плиткою "Ціна купівлі". P&L теж рахуємо від
-  // собівартості, а не від ручного "Вкладено" — інакше прибуток спотворював
-  // би довільний ввід користувача. Кеш свідомо не входить ні в
-  // investedTotalRaw, ні в currentTotalRaw тут — тому й скорочується в pnl,
-  // як і раніше.
+  // виводиться окремою плиткою "Ціна купівлі" (лише інформаційно). Сам
+  // Прибуток/збиток рахуємо як Поточна вартість - Вкладено (тобто від
+  // ручного "Вкладено" — так користувач бачить реальний P&L відносно
+  // власних внесків, а не собівартості за угодами).
   const costBasis =
     activeType === 'stock' ? Money.fromKopiyky(Math.round(investedTotalRaw)) : undefined
   const invested =
@@ -159,9 +169,8 @@ export function InvestmentsScreen() {
       ? Money.fromKopiyky(stockManualInvestedUsdMinor)
       : Money.fromKopiyky(Math.round(investedTotalRaw) + cashRaw)
   const currentValue = Money.fromKopiyky(Math.round(currentTotalRaw) + cashRaw)
-  const pnlBasis = costBasis ?? invested
-  const pnl = Money.fromKopiyky(Math.round(currentTotalRaw) - Math.round(investedTotalRaw))
-  const pnlPercent = pnlBasis.isZero() ? 0 : (pnl.toKopiyky() / pnlBasis.toKopiyky()) * 100
+  const pnl = currentValue.subtract(invested)
+  const pnlPercent = invested.isZero() ? 0 : (pnl.toKopiyky() / invested.toKopiyky()) * 100
 
   // Найдорожчі активи згори — так само, як зведена таблиця "Огляд"
   // (portfolio-summary.ts) сортує типи активів за currentValue.
@@ -399,14 +408,14 @@ export function InvestmentsScreen() {
           title={activeType === 'stock' ? 'Скільки власних коштів вкладено в акції' : 'Скільки всього вкладено в крипту'}
           description={
             activeType === 'stock'
-              ? 'Довільне число для власного обліку — ні на собівартість акцій ("Ціна купівлі"), ні на "Поточну вартість"/"Прибуток" не впливає.'
+              ? 'Скільки власних коштів реально внесено на купівлю акцій. На "Ціну купівлі" (собівартість за угодами) не впливає, але від цього числа рахується "Прибуток/збиток" (Поточна вартість − Вкладено).'
               : 'Кількість і поточну ціну кожної монети веде синк з Binance — тут можна підправити лише загальну собівартість (у $). Значення розподілиться пропорційно по всіх монетах.'
           }
           currentInvested={invested}
           onClose={() => setShowEditInvested(false)}
           onSave={async (newTotalUnits) => {
             if (activeType === 'stock') {
-              setStockManualInvestedUsdMinor(newTotalUnits)
+              await setStockManualInvestedUsdMinor(user?.id ?? '', newTotalUnits)
               return
             }
             await scaleInvested.mutateAsync(newTotalUnits)

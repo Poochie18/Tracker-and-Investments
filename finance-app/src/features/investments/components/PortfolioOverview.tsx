@@ -9,7 +9,7 @@ import { useAllBondCouponDates } from '@/hooks/use-bond-coupon-dates'
 import { useAllBondLots } from '@/hooks/use-bond-lots'
 import { usePortfolioSnapshots } from '@/hooks/use-portfolio-snapshots'
 import { useFiscalYearStartMonth } from '@/lib/settings/fiscal-year'
-import { useFreeCashUsdMinor } from '@/lib/settings/free-cash'
+import { useFreeCashUsdMinor } from '@/lib/settings/investment-settings'
 import { computePortfolioSummary, buildPortfolioSummaryFromAmounts, type PortfolioSummary } from '../portfolio-summary'
 import { useAutoPortfolioSnapshot } from '../use-auto-portfolio-snapshot'
 import { CurrencySwitch, type DisplayCurrency } from './CurrencySwitch'
@@ -49,7 +49,7 @@ export function PortfolioOverview({ investments, rates, isLoading }: PortfolioOv
   const { data: bondLots = [] } = useAllBondLots(user?.id)
   const { data: snapshots = [] } = usePortfolioSnapshots(user?.id)
   const fiscalYearStartMonth = useFiscalYearStartMonth()
-  const freeCashUsdMinor = useFreeCashUsdMinor()
+  const freeCashUsdMinor = useFreeCashUsdMinor(user?.id ?? '')
 
   const liveSummary = useMemo(
     () =>
