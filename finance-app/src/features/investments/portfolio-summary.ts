@@ -160,13 +160,14 @@ export function computePortfolioSummary(
     byType.set('crypto', { ...prev, invested: manualUah })
   }
 
-  // Вільні кошти на брокерському рахунку (акції) — додаємо однаковою сумою
-  // і в invested, і в currentValue типу 'stock', щоб дохід/% типу не
-  // спотворювались готівкою (те саме, що на вкладці "Акції" в InvestmentsScreen).
+  // Вільні кошти на брокерському рахунку (акції) — лише в currentValue
+  // типу 'stock' (гроші реально є на рахунку зараз); на invested не
+  // впливають, те тепер суто ручне число (те саме, що на вкладці "Акції"
+  // в InvestmentsScreen).
   if (freeCashUsdMinor > 0) {
     const cashUah = convertToUahMinorUnits(freeCashUsdMinor, 'USD', rates)
     const prev = byType.get('stock') ?? { invested: 0, currentValue: 0 }
-    byType.set('stock', { invested: prev.invested + cashUah, currentValue: prev.currentValue + cashUah })
+    byType.set('stock', { ...prev, currentValue: prev.currentValue + cashUah })
   }
 
   const amounts: PortfolioSnapshotRow[] = Array.from(byType.entries()).map(([type, v]) => ({ type, ...v }))
