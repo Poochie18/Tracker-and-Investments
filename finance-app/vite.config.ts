@@ -10,6 +10,13 @@ const base = '/Tracker-and-Investments/'
 
 export default defineConfig({
   base,
+  build: {
+    // hidden — генерує .map поруч з JS для дебагу мінімізованих стеків,
+    // але БЕЗ //# sourceMappingURL-коментаря в самому JS (щоб хеш і вміст
+    // бандла лишались ідентичними звичайному білду — не для дебагу в
+    // проді, а щоб локально декодувати конкретний traceback користувача).
+    sourcemap: 'hidden',
+  },
   plugins: [
     react(),
     tailwindcss(),
