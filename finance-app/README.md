@@ -1,73 +1,70 @@
-# React + TypeScript + Vite
+# Мої фінанси — Finance App
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Особистий PWA-трекер доходів/витрат та інвестиційного портфеля.
+Офлайн-first: дані завжди читаються з локальної бази на пристрої,
+синхронізація з хмарою відбувається окремим фоновим шаром — застосунок
+однаково працює і в літаку, і на телефоні без інтернету.
 
-Currently, two official plugins are available:
+🔗 **Живий застосунок:** https://poochie18.github.io/Tracker-and-Investments/
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Можливості
 
-## React Compiler
+**Транзакції** — доходи/витрати по рахунках і категоріях, регулярні
+платежі з автогенерацією (+ push-нагадування), імпорт з Excel, графіки
+по місяцях і категоріях.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+**Інвестиції** — портфель по типах (Акції, Крипта, Облігації, Депозити):
+- Акції — ручне додавання + автопідтягування ціни з Finnhub за тікером
+- Крипта — синхронізація балансів з Binance (API-ключі), або ручний облік
+- Облігації — партії купівлі (лоти), купонні виплати, прибуток за
+  фінансовий рік
+- Депозити — калькулятор помісячних нарахувань за ставкою і строком
+- Зведений "Огляд" — розподіл портфеля, дохідність по типах, історичні
+  зліпки по фінансових роках
 
-## Expanding the ESLint configuration
+**Синхронізація** — Google-логін через Supabase Auth, дані синхронізуються
+між пристроями (Realtime + періодичний push/pull); є гостьовий/локальний
+режим без хмари.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Технології
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+React 19 · TypeScript · Vite · Tailwind CSS 4 · Dexie (IndexedDB) ·
+Supabase (Postgres + Auth + Realtime + Edge Functions) · TanStack Query ·
+Recharts · vite-plugin-pwa
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+Детальніше про архітектуру — у [`CLAUDE.md`](../CLAUDE.md) в корені репо.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Розробка
+
+```bash
+npm install
+cp .env.example .env   # заповни VITE_SUPABASE_URL і VITE_SUPABASE_ANON_KEY
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Інші команди:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run build       # продакшн-збірка (tsc -b && vite build)
+npm run lint         # ESLint
+npm run test:run      # Vitest
+npm run format        # Prettier
 ```
+
+## Supabase
+
+Схема БД — у `supabase/migrations/*.sql`, застосовується вручну через
+**Supabase Dashboard → SQL Editor** (кожен файл послідовно, за номером).
+CLI-міграцій немає — при додаванні нового `NNN_*.sql` файлу не забудь
+виконати його на бойовій базі, інакше синхронізація відповідних даних
+падатиме з помилкою відсутньої таблиці/колонки.
+
+Edge Functions (`supabase/functions/`) — синк з Binance, оновлення цін
+акцій, крон регулярних платежів; деплояться окремо через Supabase CLI
+(див. `DEPLOY_CRYPTO.md`, `DEPLOY_STOCKS.md`).
+
+## Деплой
+
+Push у `main` автоматично збирає й публікує застосунок на GitHub Pages
+(`.github/workflows/deploy.yml`). Пряме коміти в `main` не практикуються —
+робота йде через окремі гілки, що мержаться в `main`.
