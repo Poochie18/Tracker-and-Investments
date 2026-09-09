@@ -4,8 +4,13 @@ import { formatPercent } from '@/lib/utils/format'
 
 interface PortfolioSummaryCardProps {
   invested: Money
+  // Собівартість (кількість × ціна купівлі, без урахування вільних коштів) —
+  // окрема плитка між "Вкладено" і "Поточна вартість". Передається лише на
+  // вкладці "Акції", де "Вкладено" — ручне поле, що більше не збігається з
+  // собівартістю паперів. Якщо не передано — картка виглядає як раніше (3 плитки).
+  costBasis?: Money
   currentValue: Money
-  pnl: Money       // currentValue - invested
+  pnl: Money       // currentValue - costBasis (якщо costBasis передано) або currentValue - invested
   // Не передавай на "Облігаціях" — там прибуток/збиток вже показано у
   // відсотках на кожній окремій облігації (BondListItem), в агрегованій
   // картці зверху це лише дублювало б і плутало (сумарний % по всіх
@@ -37,6 +42,7 @@ interface PortfolioSummaryCardProps {
 // Поточна вартість → Прибуток/збиток.
 export function PortfolioSummaryCard({
   invested,
+  costBasis,
   currentValue,
   pnl,
   pnlPercent,
@@ -52,7 +58,9 @@ export function PortfolioSummaryCard({
 
   return (
     <div
-      className={`${className} p-4 rounded-3xl grid ${stacked ? 'grid-cols-1 gap-3' : 'grid-cols-3 gap-2'} min-w-0`}
+      className={`${className} p-4 rounded-3xl grid ${
+        stacked ? 'grid-cols-1 gap-3' : costBasis ? 'grid-cols-4 gap-2' : 'grid-cols-3 gap-2'
+      } min-w-0`}
       style={{ backgroundColor: 'var(--color-bg-card)' }}
     >
       <SummaryTile
@@ -61,6 +69,10 @@ export function PortfolioSummaryCard({
         secondary={uahEquivalent && `≈ ${uahEquivalent.invested.formatWhole('₴')}`}
         onEdit={onEditInvested}
       />
+
+      {costBasis && (
+        <SummaryTile label="Ціна купівлі" value={costBasis.formatCompact(currencySymbol)} />
+      )}
 
       <SummaryTile
         label="Поточна вартість"
