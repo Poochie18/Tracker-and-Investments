@@ -2,6 +2,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { BarChart2, List, LineChart, Repeat, PieChart, Landmark, FileText, Bitcoin, TrendingUp } from 'lucide-react'
 import { BottomNav } from './BottomNav'
 import { SecondaryNav, type SecondaryNavItem } from './SecondaryNav'
+import { ErrorBoundary } from './ErrorBoundary'
 import { useFilterStore } from '@/stores/filter-store'
 import { usePriceAutoSync } from '@/hooks/use-price-auto-sync'
 import { useRecurringAutoGenerate } from '@/hooks/use-recurring-auto-generate'
@@ -77,7 +78,14 @@ export function AppLayout() {
         }}
       >
         <main className="flex-1 overflow-y-auto">
-          <Outlet />
+          {/* key={pathname} — скидає межу помилки при переході на ІНШИЙ
+              маршрут: краш конкретного екрана не ламає застосунок назавжди —
+              BottomNav/SecondaryNav лишаються видимі поза цією межею, тож
+              можна просто тапнути іншу вкладку і застосунок відновиться сам,
+              без кнопки "Перезавантажити". */}
+          <ErrorBoundary key={pathname}>
+            <Outlet />
+          </ErrorBoundary>
         </main>
 
         <div className="fixed bottom-0 left-0 right-0">
