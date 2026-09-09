@@ -1,4 +1,5 @@
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts'
+import { DeferredChart } from '@/components/DeferredChart'
 
 interface DonutSegment {
   name: string
@@ -20,27 +21,29 @@ export function DonutChart({ data, centerLabel, centerSublabel }: DonutChartProp
 
   return (
     <div className="relative flex items-center justify-center" style={{ height: 220 }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <PieChart>
-          <Pie
-            data={chartData}
-            cx="50%"
-            cy="50%"
-            innerRadius={72}
-            outerRadius={100}
-            paddingAngle={hasData ? 3 : 0}
-            dataKey="value"
-            stroke="none"
-            startAngle={90}
-            endAngle={-270}
-            isAnimationActive={false}
-          >
-            {chartData.map((entry, index) => (
-              <Cell key={index} fill={entry.color} />
-            ))}
-          </Pie>
-        </PieChart>
-      </ResponsiveContainer>
+      <DeferredChart>
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={chartData}
+              cx="50%"
+              cy="50%"
+              innerRadius={72}
+              outerRadius={100}
+              paddingAngle={hasData ? 3 : 0}
+              dataKey="value"
+              stroke="none"
+              startAngle={90}
+              endAngle={-270}
+              isAnimationActive={false}
+            >
+              {chartData.map((entry, index) => (
+                <Cell key={index} fill={entry.color} />
+              ))}
+            </Pie>
+          </PieChart>
+        </ResponsiveContainer>
+      </DeferredChart>
 
       {/* Центр пончика — сума або "Немає даних" */}
       <div
