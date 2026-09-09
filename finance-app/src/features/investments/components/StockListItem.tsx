@@ -104,7 +104,7 @@ export function StockListItem({ investment }: StockListItemProps) {
             <SummaryStat label="Кількість" value={`${investment.quantity} шт`} />
             <SummaryStat label="Середня ціна купівлі" value={`${(investment.purchase_price / 100).toLocaleString('uk-UA')} ${symbol}`} />
             <SummaryStat label="Поточна ціна" value={`${(investment.current_price / 100).toLocaleString('uk-UA')} ${symbol}`} />
-            <SummaryStat label="Вкладено" value={fmt(invested)} />
+            <SummaryStat label="Ціна купівлі" value={fmt(invested)} />
             <SummaryStat label="Поточна вартість" value={fmt(currentValue)} />
             <SummaryStat
               label="Прибуток / збиток"

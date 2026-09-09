@@ -108,10 +108,15 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType }: Inve
 
   const isSaving = createInvestment.isPending || updateInvestment.isPending
   const isBond = type === 'bond'
+  const isDeposit = type === 'deposit'
   // Для акцій поточну ціну вручну не вводимо — тягнеться з Finnhub за
   // тікером (StockSyncButton). До першого синку current_price = purchase_price,
-  // так само, як для облігацій.
-  const hidesCurrentPrice = isBond || type === 'stock'
+  // так само, як для облігацій. Депозит теж не має "поточної ціни" —
+  // за задумом дзеркалить ціну купівлі (сума вкладу), як облігація.
+  const hidesCurrentPrice = isBond || isDeposit || type === 'stock'
+  // Депозит не має "кількості" — сума вкладу вводиться напряму в полі
+  // "Ціна купівлі" (relabeled нижче на "Сума вкладу"), quantity фіксовано 1.
+  const hidesQuantity = isDeposit
   // "Кількість"/"Ціна купівлі"/"Дата купівлі" для облігацій, що
   // редагуються, теж доступні для правки напряму — окремо від партій
   // (bond_lots), керованих через BondListItem → "Докупити"/тап на партію.
@@ -126,7 +131,9 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType }: Inve
   const handleSave = async () => {
     setError(null)
 
-    const quantityNum = parseFloat(quantity.replace(',', '.'))
+    // Депозит не має "кількості" — фіксуємо 1, щоб purchase_price*quantity
+    // (сума вкладу для deposit-schedule.ts) дорівнювала введеній сумі вкладу.
+    const quantityNum = hidesQuantity ? 1 : parseFloat(quantity.replace(',', '.'))
     const purchasePriceNum = parseFloat(purchasePrice.replace(',', '.'))
     const currentPriceNum = parseFloat(currentPrice.replace(',', '.'))
 
@@ -134,16 +141,17 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType }: Inve
       setError('Введіть назву активу')
       return
     }
-    if (!quantity || isNaN(quantityNum) || quantityNum <= 0) {
+    if (!hidesQuantity && (!quantity || isNaN(quantityNum) || quantityNum <= 0)) {
       setError('Введіть кількість більше 0')
       return
     }
     if (!purchasePrice || isNaN(purchasePriceNum) || purchasePriceNum < 0) {
-      setError('Введіть ціну купівлі')
+      setError(isDeposit ? 'Введіть суму вкладу' : 'Введіть ціну купівлі')
       return
     }
     // Для облігацій поточну ціну не вводимо (тримаємо до погашення за номіналом),
-    // для акцій — теж не вводимо (підтягується з Finnhub за тікером)
+    // для акцій — теж не вводимо (підтягується з Finnhub за тікером), для
+    // депозиту — теж (немає "поточної ціни" — лише сума вкладу)
     if (!hidesCurrentPrice && (!currentPrice || isNaN(currentPriceNum) || currentPriceNum < 0)) {
       setError('Введіть поточну ціну')
       return
@@ -167,7 +175,7 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType }: Inve
     // збереження форми (напр. зміна назви) скидало б поточну ціну до ціни
     // купівлі. purchasePriceNum лишається лише запасним варіантом для НОВОЇ
     // акції (currentPriceNum ще не ініціалізований — NaN).
-    const currentPriceForSave = isBond
+    const currentPriceForSave = isBond || isDeposit
       ? purchasePriceNum
       : type === 'stock'
         ? (isNaN(currentPriceNum) ? purchasePriceNum : currentPriceNum)
@@ -296,20 +304,23 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType }: Inve
           />
         </Field>
 
-        {/* ── Кількість + Валюта ───────────────────────────────── */}
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Кількість" disabled={bondFieldsLocked}>
-            <input
-              type="text"
-              inputMode="decimal"
-              placeholder="0"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value.replace(/[^0-9.,]/g, ''))}
-              disabled={bondFieldsLocked}
-              className="w-full text-base bg-transparent border-none outline-none"
-              style={{ color: 'var(--color-text-primary)' }}
-            />
-          </Field>
+        {/* ── Кількість (немає в депозиту — сума вкладу вводиться напряму
+             в полі "Сума вкладу" нижче) + Валюта ───────────────────────── */}
+        <div className={hidesQuantity ? '' : 'grid grid-cols-2 gap-4'}>
+          {!hidesQuantity && (
+            <Field label="Кількість" disabled={bondFieldsLocked}>
+              <input
+                type="text"
+                inputMode="decimal"
+                placeholder="0"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value.replace(/[^0-9.,]/g, ''))}
+                disabled={bondFieldsLocked}
+                className="w-full text-base bg-transparent border-none outline-none"
+                style={{ color: 'var(--color-text-primary)' }}
+              />
+            </Field>
+          )}
 
           <Field label="Валюта">
             <select
@@ -329,9 +340,10 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType }: Inve
 
         {/* ── Ціна купівлі + поточна ціна/тікер (для облігацій поточна ціна
              не потрібна — тримаємо до погашення за номіналом; для акцій —
-             замість неї тікер, ціна підтягується з Finnhub) ──────────── */}
-        <div className="grid grid-cols-2 gap-4">
-          <Field label={`Ціна купівлі (середня, ${currency})`} disabled={bondFieldsLocked}>
+             замість неї тікер, ціна підтягується з Finnhub; для депозиту —
+             саме поле стає "Сумою вкладу", другого поля немає) ─────────── */}
+        <div className={isDeposit ? '' : 'grid grid-cols-2 gap-4'}>
+          <Field label={isDeposit ? `Сума вкладу (${currency})` : `Ціна купівлі (середня, ${currency})`} disabled={bondFieldsLocked}>
             <input
               type="text"
               inputMode="decimal"

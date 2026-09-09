@@ -25,6 +25,7 @@ import { StockSyncButton } from './StockSyncButton'
 import { EditInvestedModal } from './EditInvestedModal'
 import { FreeCashCard } from './FreeCashCard'
 import { useFreeCashUsdMinor } from '@/lib/settings/free-cash'
+import { useStockManualInvestedUsdMinor, setStockManualInvestedUsdMinor } from '@/lib/settings/stock-manual-invested'
 import { BondFiscalYearTable } from './BondFiscalYearTable'
 import { PortfolioOverview } from './PortfolioOverview'
 import { computeDepositTotals } from '../deposit-schedule'
@@ -65,6 +66,11 @@ export function InvestmentsScreen() {
   // однаковою сумою і в "Вкладено", і в "Поточну вартість", щоб "Прибуток"
   // відображав тільки реальний P&L паперів, а не готівку на рахунку.
   const freeCashUsdMinor = useFreeCashUsdMinor()
+  // "Вкладено" на вкладці "Акції" — більше не похідне від purchase_price*
+  // quantity (та сума тепер "Ціна купівлі"), а введене вручну число: скільки
+  // власних коштів реально внесено. Ні на "Поточну вартість", ні на
+  // "Прибуток" не впливає — суто інформаційна плитка.
+  const stockManualInvestedUsdMinor = useStockManualInvestedUsdMinor()
 
   // Тут сума рахується без конвертації валют — на вкладці одного типу
   // активи зазвичай в одній валюті (напр. усі акції в USD). Якщо activeType
@@ -139,10 +145,23 @@ export function InvestmentsScreen() {
   // Вільні кошти — однаково в обидва підсумки (див. коментар вище), тому
   // на pnl не впливають, а на "Вкладено"/"Поточну вартість" — впливають.
   const cashRaw = activeType === 'stock' ? freeCashUsdMinor : 0
-  const invested = Money.fromKopiyky(Math.round(investedTotalRaw) + cashRaw)
+  // На "Акціях" "Вкладено" — ручне число (див. коментар при виклику хука
+  // вище), а собівартість паперів (кількість × ціна купівлі, БЕЗ готівки)
+  // виводиться окремою плиткою "Ціна купівлі". P&L теж рахуємо від
+  // собівартості, а не від ручного "Вкладено" — інакше прибуток спотворював
+  // би довільний ввід користувача. Кеш свідомо не входить ні в
+  // investedTotalRaw, ні в currentTotalRaw тут — тому й скорочується в pnl,
+  // як і раніше.
+  const costBasis =
+    activeType === 'stock' ? Money.fromKopiyky(Math.round(investedTotalRaw)) : undefined
+  const invested =
+    activeType === 'stock'
+      ? Money.fromKopiyky(stockManualInvestedUsdMinor)
+      : Money.fromKopiyky(Math.round(investedTotalRaw) + cashRaw)
   const currentValue = Money.fromKopiyky(Math.round(currentTotalRaw) + cashRaw)
-  const pnl = currentValue.subtract(invested)
-  const pnlPercent = invested.isZero() ? 0 : (pnl.toKopiyky() / invested.toKopiyky()) * 100
+  const pnlBasis = costBasis ?? invested
+  const pnl = Money.fromKopiyky(Math.round(currentTotalRaw) - Math.round(investedTotalRaw))
+  const pnlPercent = pnlBasis.isZero() ? 0 : (pnl.toKopiyky() / pnlBasis.toKopiyky()) * 100
 
   // Найдорожчі активи згори — так само, як зведена таблиця "Огляд"
   // (portfolio-summary.ts) сортує типи активів за currentValue.
@@ -275,6 +294,7 @@ export function InvestmentsScreen() {
             {investments.length > 0 && (
               <PortfolioSummaryCard
                 invested={invested}
+                costBasis={costBasis}
                 currentValue={currentValue}
                 pnl={pnl}
                 pnlPercent={pnlPercent}
@@ -376,15 +396,21 @@ export function InvestmentsScreen() {
 
       {showEditInvested && (
         <EditInvestedModal
-          title={activeType === 'stock' ? 'Скільки всього вкладено в акції' : 'Скільки всього вкладено в крипту'}
+          title={activeType === 'stock' ? 'Скільки власних коштів вкладено в акції' : 'Скільки всього вкладено в крипту'}
           description={
             activeType === 'stock'
-              ? 'Кількість і собівартість кожної акції редагуються по одній через картку активу — тут можна підправити лише загальну собівартість. Значення розподілиться пропорційно по всіх акціях.'
+              ? 'Довільне число для власного обліку — ні на собівартість акцій ("Ціна купівлі"), ні на "Поточну вартість"/"Прибуток" не впливає.'
               : 'Кількість і поточну ціну кожної монети веде синк з Binance — тут можна підправити лише загальну собівартість (у $). Значення розподілиться пропорційно по всіх монетах.'
           }
           currentInvested={invested}
           onClose={() => setShowEditInvested(false)}
-          onSave={(newTotalUnits) => scaleInvested.mutateAsync(newTotalUnits)}
+          onSave={async (newTotalUnits) => {
+            if (activeType === 'stock') {
+              setStockManualInvestedUsdMinor(newTotalUnits)
+              return
+            }
+            await scaleInvested.mutateAsync(newTotalUnits)
+          }}
         />
       )}
     </div>
