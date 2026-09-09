@@ -112,6 +112,10 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType }: Inve
   // тікером (StockSyncButton). До першого синку current_price = purchase_price,
   // так само, як для облігацій.
   const hidesCurrentPrice = isBond || type === 'stock'
+  // Ціну купівлі для крипти більше не ведемо по кожній монеті окремо —
+  // "Вкладено (крипта)" тепер одне число в Налаштуваннях/пенсілі зведення
+  // (user_investment_settings), не сума purchase_price×quantity по рядках.
+  const hidesPurchasePrice = type === 'crypto'
   // "Кількість"/"Ціна купівлі"/"Дата купівлі" для облігацій, що
   // редагуються, теж доступні для правки напряму — окремо від партій
   // (bond_lots), керованих через BondListItem → "Докупити"/тап на партію.
@@ -127,7 +131,9 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType }: Inve
     setError(null)
 
     const quantityNum = parseFloat(quantity.replace(',', '.'))
-    const purchasePriceNum = parseFloat(purchasePrice.replace(',', '.'))
+    // Для крипти поле сховане (hidesPurchasePrice) — 0, не NaN, щоб не
+    // ламати валідацію/збереження нижче.
+    const purchasePriceNum = hidesPurchasePrice ? 0 : parseFloat(purchasePrice.replace(',', '.'))
     const currentPriceNum = parseFloat(currentPrice.replace(',', '.'))
 
     if (!name.trim()) {
@@ -138,7 +144,7 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType }: Inve
       setError('Введіть кількість більше 0')
       return
     }
-    if (!purchasePrice || isNaN(purchasePriceNum) || purchasePriceNum < 0) {
+    if (!hidesPurchasePrice && (!purchasePrice || isNaN(purchasePriceNum) || purchasePriceNum < 0)) {
       setError('Введіть ціну купівлі')
       return
     }
@@ -331,18 +337,20 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType }: Inve
              не потрібна — тримаємо до погашення за номіналом; для акцій —
              замість неї тікер, ціна підтягується з Finnhub) ──────────── */}
         <div className="grid grid-cols-2 gap-4">
-          <Field label={`Ціна купівлі (середня, ${currency})`} disabled={bondFieldsLocked}>
-            <input
-              type="text"
-              inputMode="decimal"
-              placeholder="0"
-              value={purchasePrice}
-              onChange={(e) => setPurchasePrice(e.target.value.replace(/[^0-9.,]/g, ''))}
-              disabled={bondFieldsLocked}
-              className="w-full text-base bg-transparent border-none outline-none"
-              style={{ color: 'var(--color-text-primary)' }}
-            />
-          </Field>
+          {!hidesPurchasePrice && (
+            <Field label={`Ціна купівлі (середня, ${currency})`} disabled={bondFieldsLocked}>
+              <input
+                type="text"
+                inputMode="decimal"
+                placeholder="0"
+                value={purchasePrice}
+                onChange={(e) => setPurchasePrice(e.target.value.replace(/[^0-9.,]/g, ''))}
+                disabled={bondFieldsLocked}
+                className="w-full text-base bg-transparent border-none outline-none"
+                style={{ color: 'var(--color-text-primary)' }}
+              />
+            </Field>
+          )}
 
           {type === 'bond' && (
             <Field label={`Сума погашення за 1 шт (${currency})`}>
@@ -372,7 +380,7 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType }: Inve
           )}
 
           {!hidesCurrentPrice && (
-            <Field label={`Поточна ціна (${currency})`}>
+            <Field label={`Поточна ціна (${currency})`} className={hidesPurchasePrice ? 'col-span-2' : undefined}>
               <input
                 type="text"
                 inputMode="decimal"
@@ -532,9 +540,11 @@ function InvestmentForm({ id, existing, existingCouponDates, defaultType }: Inve
 
 // disabled — тільки візуальне притлумлення (для режиму "докупити"); сам
 // <input>/<select> всередині все одно потребує свого атрибута disabled.
-function Field({ label, children, disabled }: { label: string; children: React.ReactNode; disabled?: boolean }) {
+function Field({
+  label, children, disabled, className,
+}: { label: string; children: React.ReactNode; disabled?: boolean; className?: string }) {
   return (
-    <div style={{ opacity: disabled ? 0.5 : 1 }}>
+    <div className={className} style={{ opacity: disabled ? 0.5 : 1 }}>
       <p className="text-xs font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
         {label}
       </p>

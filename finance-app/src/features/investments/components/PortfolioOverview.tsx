@@ -9,7 +9,7 @@ import { useAllBondCouponDates } from '@/hooks/use-bond-coupon-dates'
 import { useAllBondLots } from '@/hooks/use-bond-lots'
 import { usePortfolioSnapshots } from '@/hooks/use-portfolio-snapshots'
 import { useFiscalYearStartMonth } from '@/lib/settings/fiscal-year'
-import { useFreeCashUsdMinor } from '@/lib/settings/free-cash'
+import { useUserInvestmentSettings } from '@/hooks/use-user-investment-settings'
 import { computePortfolioSummary, buildPortfolioSummaryFromAmounts, type PortfolioSummary } from '../portfolio-summary'
 import { useAutoPortfolioSnapshot } from '../use-auto-portfolio-snapshot'
 import { CurrencySwitch, type DisplayCurrency } from './CurrencySwitch'
@@ -49,7 +49,10 @@ export function PortfolioOverview({ investments, rates, isLoading }: PortfolioOv
   const { data: bondLots = [] } = useAllBondLots(user?.id)
   const { data: snapshots = [] } = usePortfolioSnapshots(user?.id)
   const fiscalYearStartMonth = useFiscalYearStartMonth()
-  const freeCashUsdMinor = useFreeCashUsdMinor()
+  const { data: invSettings } = useUserInvestmentSettings(user?.id)
+  const freeCashUsdMinor = invSettings?.free_cash_usd_minor ?? 0
+  const stockManualInvestedUsdMinor = invSettings?.stock_manual_invested_usd_minor ?? 0
+  const cryptoManualInvestedUsdMinor = invSettings?.crypto_manual_invested_usd_minor ?? 0
 
   const liveSummary = useMemo(
     () =>
@@ -61,10 +64,15 @@ export function PortfolioOverview({ investments, rates, isLoading }: PortfolioOv
             bondCouponDates,
             bondLots,
             fiscalYearStartMonth,
-            freeCashUsdMinor
+            freeCashUsdMinor,
+            stockManualInvestedUsdMinor,
+            cryptoManualInvestedUsdMinor
           )
         : null,
-    [investments, rates, depositContributions, bondCouponDates, bondLots, fiscalYearStartMonth, freeCashUsdMinor]
+    [
+      investments, rates, depositContributions, bondCouponDates, bondLots, fiscalYearStartMonth,
+      freeCashUsdMinor, stockManualInvestedUsdMinor, cryptoManualInvestedUsdMinor,
+    ]
   )
 
   // Найкращий момент зафіксувати зліпок минулого року — коли є свіжі живі

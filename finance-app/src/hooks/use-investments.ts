@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { investmentsRepo } from '@/features/investments/repositories/investments-repo'
 import type { InvestmentFormData } from '@/features/investments/types'
-import type { InvestmentType } from '@/lib/db/schema'
 import { useSyncContext } from '@/lib/sync/sync-context'
 
 export const investmentKeys = {
@@ -75,25 +74,6 @@ export function useUpdateInvestmentPrice(userId: string) {
     onSuccess: (_data, { id }) => {
       void queryClient.invalidateQueries({ queryKey: investmentKeys.all(userId) })
       void queryClient.invalidateQueries({ queryKey: investmentKeys.detail(id) })
-      triggerSync()
-    },
-  })
-}
-
-// Пенсіл біля АГРЕГОВАНОГО "Вкладено" (Крипта, Акції) — масштабує
-// собівартість усіх рядків заданого типу пропорційно, щоб їх сума стала
-// новим введеним значенням (див. investmentsRepo.scaleInvestedByType).
-export function useScaleInvestedByType(userId: string, type: InvestmentType) {
-  const queryClient = useQueryClient()
-  const { triggerSync } = useSyncContext()
-
-  return useMutation({
-    mutationFn: (newTotalUnits: number) => investmentsRepo.scaleInvestedByType(userId, type, newTotalUnits),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: investmentKeys.all(userId) })
-      // Торкається N рядків одразу (конкретні id наперед невідомі) — б'ємо
-      // по всьому префіксу 'investment', а не по одному detail(id).
-      void queryClient.invalidateQueries({ queryKey: ['investment'] })
       triggerSync()
     },
   })

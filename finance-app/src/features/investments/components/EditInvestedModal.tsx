@@ -10,12 +10,10 @@ interface EditInvestedModalProps {
   onSave: (newTotalUnits: number) => Promise<void>
 }
 
-// Модалка пенсіла біля агрегованого "Вкладено" (Крипта, Акції). Сума —
-// похідна від N рядків, тож редагуємо її як одне число: введене значення
-// пропорційно розподіляється по собівартості всіх рядків цього типу
-// (investmentsRepo.scaleInvestedByType) — тому й "Огляд", і сама вкладка
-// одразу відображають нову суму консистентно (одні дані, не окремий
-// override десь збоку).
+// Модалка пенсіла біля агрегованого "Вкладено" (Крипта, Акції). Введене
+// значення зберігається як окреме число в user_investment_settings
+// (stock/crypto_manual_invested_usd_minor) — і "Огляд", і сама вкладка
+// читають те саме поле, тому відображають суму консистентно.
 export function EditInvestedModal({ title, description, currentInvested, onClose, onSave }: EditInvestedModalProps) {
   const [value, setValue] = useState(currentInvested.toUah().toString())
   const [saving, setSaving] = useState(false)

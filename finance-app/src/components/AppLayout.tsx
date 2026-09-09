@@ -5,6 +5,7 @@ import { SecondaryNav, type SecondaryNavItem } from './SecondaryNav'
 import { useFilterStore } from '@/stores/filter-store'
 import { usePriceAutoSync } from '@/hooks/use-price-auto-sync'
 import { useRecurringAutoGenerate } from '@/hooks/use-recurring-auto-generate'
+import { useVisibleInvestmentTypes } from '@/lib/settings/investment-visibility'
 
 // Екрани-"дриль-даун" (форми Додати/Редагувати, детальна картка активу) —
 // там нема другого рівня навігації, зосереджуємось на самому екрані
@@ -28,6 +29,7 @@ export function AppLayout() {
   const navigate = useNavigate()
   const location = useLocation()
   const setCategoryFilter = useFilterStore((s) => s.setCategoryFilter)
+  const visibleInvestmentTypes = useVisibleInvestmentTypes()
   const { pathname } = location
   // Автосинк цін акцій/крипти (кожні 6 год + при вході/поверненні з фону) —
   // тут, а не на самих вкладках, щоб спрацьовував незалежно від того, який
@@ -44,13 +46,15 @@ export function AppLayout() {
 
   let secondaryItems: SecondaryNavItem[] | null = null
   if (isInvestmentsSection && !isFormScreen) {
+    // "Огляд" завжди в меню — приховати можна лише вкладки конкретних типів
+    // (Налаштування → Про застосунок → "Відображення інвестицій").
     secondaryItems = [
       { to: '/investments', icon: PieChart, label: 'Огляд' },
-      { to: '/investments/type/deposit', icon: Landmark, label: 'Депозити' },
-      { to: '/investments/type/bond', icon: FileText, label: 'Облігації' },
-      { to: '/investments/type/crypto', icon: Bitcoin, label: 'Крипта' },
-      { to: '/investments/type/stock', icon: TrendingUp, label: 'Акції' },
-    ]
+      visibleInvestmentTypes.has('deposit') && { to: '/investments/type/deposit', icon: Landmark, label: 'Депозити' },
+      visibleInvestmentTypes.has('bond') && { to: '/investments/type/bond', icon: FileText, label: 'Облігації' },
+      visibleInvestmentTypes.has('crypto') && { to: '/investments/type/crypto', icon: Bitcoin, label: 'Крипта' },
+      visibleInvestmentTypes.has('stock') && { to: '/investments/type/stock', icon: TrendingUp, label: 'Акції' },
+    ].filter((item): item is SecondaryNavItem => item !== false)
   } else if (!isInvestmentsSection && !isSettingsSection && !isFormScreen) {
     secondaryItems = [
       { to: '/overview', icon: BarChart2, label: 'Огляд' },

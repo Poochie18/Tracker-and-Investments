@@ -98,6 +98,10 @@ export function InvestmentDetailScreen() {
         </div>
 
         {/* ── Поточна вартість + P&L ──────────────────────────── */}
+        {/* Для крипти ціну купівлі по кожній монеті більше не ведемо
+            (hidesPurchasePrice в AddInvestmentScreen) — per-item "Вкладено"/
+            "Прибуток" тут був би оманливим (завжди $0/+100%). Загальне
+            "Вкладено (крипта)" — окремий пенсіл на вкладці "Крипта". */}
         <div
           className="p-5 rounded-3xl flex flex-col gap-3"
           style={{ backgroundColor: 'var(--color-bg-card)' }}
@@ -110,9 +114,11 @@ export function InvestmentDetailScreen() {
               {currentValue.formatCompact(symbol)}
             </p>
           </div>
-          <p className="text-sm font-semibold" style={{ color: isProfit ? 'var(--color-income)' : 'var(--color-expense)' }}>
-            {isProfit ? '+' : ''}{pnl.formatCompact(symbol)} ({isProfit ? '+' : ''}{formatPercent(pnlPercent, 1)})
-          </p>
+          {investment.type !== 'crypto' && (
+            <p className="text-sm font-semibold" style={{ color: isProfit ? 'var(--color-income)' : 'var(--color-expense)' }}>
+              {isProfit ? '+' : ''}{pnl.formatCompact(symbol)} ({isProfit ? '+' : ''}{formatPercent(pnlPercent, 1)})
+            </p>
+          )}
         </div>
 
         {/* ── Деталі ───────────────────────────────────────────── */}
@@ -121,9 +127,13 @@ export function InvestmentDetailScreen() {
           style={{ backgroundColor: 'var(--color-bg-card)' }}
         >
           <DetailRow label="Кількість" value={String(investment.quantity)} />
-          <DetailRow label="Ціна купівлі" value={`${(investment.purchase_price / 100).toLocaleString('uk-UA')} ${symbol}`} />
+          {investment.type !== 'crypto' && (
+            <DetailRow label="Ціна купівлі" value={`${(investment.purchase_price / 100).toLocaleString('uk-UA')} ${symbol}`} />
+          )}
           <DetailRow label="Поточна ціна" value={`${(investment.current_price / 100).toLocaleString('uk-UA')} ${symbol}`} />
-          <DetailRow label="Вкладено" value={invested.formatCompact(symbol)} />
+          {investment.type !== 'crypto' && (
+            <DetailRow label="Вкладено" value={invested.formatCompact(symbol)} />
+          )}
           <DetailRow label="Дата купівлі" value={format(new Date(investment.purchase_date), 'd MMMM yyyy', { locale: uk })} last={!investment.notes} />
           {investment.notes && <DetailRow label="Нотатки" value={investment.notes} last />}
         </div>

@@ -1,4 +1,5 @@
 import path from 'path'
+import { readFileSync } from 'fs'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -8,8 +9,15 @@ import { VitePWA } from 'vite-plugin-pwa'
 // base застосовується і до Vite-збірки, і до маніфесту/service worker нижче.
 const base = '/Tracker-and-Investments/'
 
+// Версія з package.json — показується в Налаштування → Про застосунок
+// (__APP_VERSION__, оголошено в src/vite-env.d.ts).
+const pkg = JSON.parse(readFileSync(path.resolve(__dirname, 'package.json'), 'utf-8')) as { version: string }
+
 export default defineConfig({
   base,
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
   plugins: [
     react(),
     tailwindcss(),

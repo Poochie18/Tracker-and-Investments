@@ -15,6 +15,11 @@ interface PortfolioSummaryCardProps {
   // сумою, коли портфель ведеться в USD (крипта). Якщо не передано —
   // картка виглядає як раніше (лише основна валюта).
   uahEquivalent?: { invested: Money; currentValue: Money; pnl: Money }
+  // "Сума купівлі" — реальна сума purchase_price×quantity по всіх рядках
+  // (лише "Акції": скільки фактично витрачено на куплені акції). Окрема
+  // плитка між "Вкладено" (тепер суто ручне число) і "Поточна вартість".
+  // Якщо не передано — картка виглядає як раніше (три плитки).
+  purchaseAmount?: Money
   // Символ основної валюти картки — типово '₴' (більшість вкладок ведуть
   // підсумок у гривневому базисі). На "Крипті" все в USD, тож там передають
   // '$', інакше картка показувала б суми в доларах під знаком ₴.
@@ -41,6 +46,7 @@ export function PortfolioSummaryCard({
   pnl,
   pnlPercent,
   uahEquivalent,
+  purchaseAmount,
   currencySymbol = '₴',
   stacked,
   className = 'mx-4',
@@ -50,9 +56,13 @@ export function PortfolioSummaryCard({
   const pnlColor = isProfit ? 'var(--color-income)' : 'var(--color-expense)'
   const sign = isProfit ? '+' : ''
 
+  // З purchaseAmount плиток чотири — на широкому екрані рядок з 4
+  // ставав би затісним, тож розкладаємо 2×2 замість одного ряду.
+  const gridClass = stacked ? 'grid-cols-1 gap-3' : purchaseAmount ? 'grid-cols-2 gap-3' : 'grid-cols-3 gap-2'
+
   return (
     <div
-      className={`${className} p-4 rounded-3xl grid ${stacked ? 'grid-cols-1 gap-3' : 'grid-cols-3 gap-2'} min-w-0`}
+      className={`${className} p-4 rounded-3xl grid ${gridClass} min-w-0`}
       style={{ backgroundColor: 'var(--color-bg-card)' }}
     >
       <SummaryTile
@@ -61,6 +71,10 @@ export function PortfolioSummaryCard({
         secondary={uahEquivalent && `≈ ${uahEquivalent.invested.formatWhole('₴')}`}
         onEdit={onEditInvested}
       />
+
+      {purchaseAmount && (
+        <SummaryTile label="Сума купівлі" value={purchaseAmount.formatCompact(currencySymbol)} />
+      )}
 
       <SummaryTile
         label="Поточна вартість"
