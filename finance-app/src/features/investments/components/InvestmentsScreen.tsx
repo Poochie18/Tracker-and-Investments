@@ -47,6 +47,14 @@ const CRYPTO_DUST_THRESHOLD_USD = 50
 
 const VALID_TYPES: InvestmentType[] = ['stock', 'crypto', 'bond', 'deposit', 'other']
 
+// Стабільна референція для "поки завантажується" — `data: x = []` в
+// деструктуризації нижче створював би НОВИЙ порожній масив щорендеру, поки
+// query ще не всталося (undefined), ламаючи будь-яку мемоізацію нижче по
+// дереву (те саме, що вже пофіксили в PortfolioOverview.tsx — див. коментар
+// там). Той самий EMPTY_ARRAY тут, а не спільний імпорт — щоб не тягнути
+// між модулями синглтон заради економії одного рядка.
+const EMPTY_ARRAY: never[] = []
+
 export function InvestmentsScreen() {
   const navigate = useNavigate()
   const { assetType } = useParams<{ assetType?: string }>()
@@ -55,11 +63,11 @@ export function InvestmentsScreen() {
     : null
 
   const { user } = useAuth()
-  const { data: allInvestments = [], isLoading } = useInvestments(user?.id)
+  const { data: allInvestments = EMPTY_ARRAY, isLoading } = useInvestments(user?.id)
   const { data: rates } = useExchangeRates()
-  const { data: depositContributions = [] } = useAllDepositContributions(user?.id)
-  const { data: bondCouponDates = [] } = useAllBondCouponDates(user?.id)
-  const { data: bondLots = [] } = useAllBondLots(user?.id)
+  const { data: depositContributions = EMPTY_ARRAY } = useAllDepositContributions(user?.id)
+  const { data: bondCouponDates = EMPTY_ARRAY } = useAllBondCouponDates(user?.id)
+  const { data: bondLots = EMPTY_ARRAY } = useAllBondLots(user?.id)
   const fiscalYearStartMonth = useFiscalYearStartMonth()
   const { data: binanceStatus } = useBinanceConnectionStatus()
   useCleanupOrphanedCryptoSync(user?.id, activeType === 'crypto')
