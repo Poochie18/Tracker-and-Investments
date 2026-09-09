@@ -122,59 +122,6 @@ export const investmentsRepo = {
     })
   },
 
-  // Пропорційно масштабує собівартість (purchase_price) УСІХ активів заданого
-  // типу користувача так, щоб їх сумарне "Вкладено" стало newTotalUnits (у
-  // "копійках" валюти портфеля). Для пенсіла біля АГРЕГОВАНОГО "Вкладено"
-  // (Крипта, Акції) — саму суму редагувати напряму нема сенсу (вона похідна
-  // від N рядків), тож розподіляємо зміну пропорційно: множимо purchase_price
-  // кожного рядка на один коефіцієнт (invested_i = purchase_price_i ×
-  // quantity_i, тож множення purchase_price_i на ratio масштабує invested_i
-  // на той самий ratio незалежно від quantity).
-  async scaleInvestedByType(userId: string, type: InvestmentType, newTotalUnits: number): Promise<void> {
-    const items = await db.investments
-      .where('user_id')
-      .equals(userId)
-      .filter((i) => i.type === type && i.deleted_at === null)
-      .toArray()
-    if (items.length === 0) return
-
-    const now = new Date().toISOString()
-    const oldTotal = items.reduce((sum, i) => sum + i.purchase_price * i.quantity, 0)
-
-    if (oldTotal > 0) {
-      const ratio = newTotalUnits / oldTotal
-      await Promise.all(
-        items.map((i) =>
-          db.investments.update(i.id, {
-            purchase_price: i.purchase_price * ratio,
-            updated_at: now,
-            _sync_status: 'pending',
-            _local_updated_at: Date.now(),
-          })
-        )
-      )
-      return
-    }
-
-    // Нема з чого масштабувати (усі purchase_price = 0, напр. щойно
-    // підключений синк) — розподіляємо пропорційно поточній вартості;
-    // якщо й вона нульова — рівними частками між рядками.
-    const totalCurrentValue = items.reduce((sum, i) => sum + i.current_price * i.quantity, 0)
-    await Promise.all(
-      items.map((i) => {
-        const weight =
-          totalCurrentValue > 0 ? (i.current_price * i.quantity) / totalCurrentValue : 1 / items.length
-        const newPurchasePrice = i.quantity > 0 ? (newTotalUnits * weight) / i.quantity : 0
-        return db.investments.update(i.id, {
-          purchase_price: newPurchasePrice,
-          updated_at: now,
-          _sync_status: 'pending',
-          _local_updated_at: Date.now(),
-        })
-      })
-    )
-  },
-
   // "Докупити" акцію — на відміну від облігацій (партії/лоти з датою кожної
   // покупки, bond-lots-repo.ts), для акцій ведемо простий "плаский" рахунок:
   // кількість підсумовується, а середня ціна купівлі — простим середнім

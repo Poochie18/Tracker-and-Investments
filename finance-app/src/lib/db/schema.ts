@@ -201,6 +201,24 @@ export interface RecurringPayment {
   deleted_at: string | null      // null = активний, не-null = видалений (soft delete)
 }
 
+// Один рядок на користувача — "Вільні кошти" (готівка на брокерському
+// рахунку, вкладка "Акції") і ручне "Вкладено" на вкладках "Акції"/"Крипта"
+// (агреговане число, редагується пенсілом біля картки зведення — не
+// виводиться з purchase_price окремих активів, бо для крипти ціна купівлі
+// по кожній монеті більше не ведеться, див. AddInvestmentScreen).
+// id навмисно окремий від user_id (хоч і рівний йому) — щоб тип підпадав
+// під спільний generic pushTable<T extends {id: string}> в sync-queue.ts,
+// як і решта таблиць.
+export interface UserInvestmentSettings {
+  id: string      // = user_id
+  user_id: string
+  free_cash_usd_minor: number               // ЗАВЖДИ у копійках (центах) USD
+  stock_manual_invested_usd_minor: number   // ЗАВЖДИ у копійках (центах) USD
+  crypto_manual_invested_usd_minor: number  // ЗАВЖДИ у копійках (центах) USD
+  created_at: string
+  updated_at: string
+}
+
 export interface Tag {
   id: string
   user_id: string
@@ -272,6 +290,12 @@ export interface LocalRecurringPayment extends RecurringPayment {
 }
 
 export interface LocalTag extends Tag {
+  _sync_status: SyncStatus
+  _sync_error: string | null
+  _local_updated_at: number
+}
+
+export interface LocalUserInvestmentSettings extends UserInvestmentSettings {
   _sync_status: SyncStatus
   _sync_error: string | null
   _local_updated_at: number

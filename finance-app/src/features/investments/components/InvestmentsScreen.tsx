@@ -4,7 +4,7 @@ import { format } from 'date-fns'
 import { uk } from 'date-fns/locale'
 import { TrendingUp, ChevronDown, ChevronUp, KeyRound, ChevronRight } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
-import { useInvestments, useScaleInvestedByType } from '@/hooks/use-investments'
+import { useInvestments } from '@/hooks/use-investments'
 import { useBinanceConnectionStatus, useCleanupOrphanedCryptoSync } from '@/hooks/use-crypto-exchange'
 import { useExchangeRates } from '@/hooks/use-exchange-rates'
 import { useAllDepositContributions } from '@/hooks/use-deposit-contributions'
@@ -24,7 +24,7 @@ import { CryptoSyncButton } from './CryptoSyncButton'
 import { StockSyncButton } from './StockSyncButton'
 import { EditInvestedModal } from './EditInvestedModal'
 import { FreeCashCard } from './FreeCashCard'
-import { useFreeCashUsdMinor } from '@/lib/settings/free-cash'
+import { useUserInvestmentSettings, useUpdateUserInvestmentSettings } from '@/hooks/use-user-investment-settings'
 import { BondFiscalYearTable } from './BondFiscalYearTable'
 import { PortfolioOverview } from './PortfolioOverview'
 import { computeDepositTotals } from '../deposit-schedule'
@@ -58,13 +58,19 @@ export function InvestmentsScreen() {
   useCleanupOrphanedCryptoSync(user?.id, activeType === 'crypto')
   const [showDust, setShowDust] = useState(false)
   const [showEditInvested, setShowEditInvested] = useState(false)
-  // activeType null лише на "Огляді" (ранній return нижче) — тут завжди
-  // конкретний тип; хук викликається безумовно (правила хуків), як і раніше.
-  const scaleInvested = useScaleInvestedByType(user?.id ?? '', activeType ?? 'crypto')
+  const { data: invSettings } = useUserInvestmentSettings(user?.id)
+  const updateInvestmentSettings = useUpdateUserInvestmentSettings(user?.id ?? '')
   // Вільні кошти на брокерському рахунку (лише вкладка "Акції") — рахуємо
   // однаковою сумою і в "Вкладено", і в "Поточну вартість", щоб "Прибуток"
   // відображав тільки реальний P&L паперів, а не готівку на рахунку.
-  const freeCashUsdMinor = useFreeCashUsdMinor()
+  const freeCashUsdMinor = invSettings?.free_cash_usd_minor ?? 0
+  // Ручне "Вкладено" (пенсіл біля зведення Крипта/Акції) — коли задане
+  // (>0), замінює похідну суму purchase_price×quantity по рядках (див.
+  // portfolio-summary.ts). Не задане (0) → як і раніше, беремо суму по рядках.
+  const stockManualInvestedUsdMinor = invSettings?.stock_manual_invested_usd_minor ?? 0
+  const cryptoManualInvestedUsdMinor = invSettings?.crypto_manual_invested_usd_minor ?? 0
+  const manualInvestedUsdMinor =
+    activeType === 'stock' ? stockManualInvestedUsdMinor : activeType === 'crypto' ? cryptoManualInvestedUsdMinor : 0
 
   // Тут сума рахується без конвертації валют — на вкладці одного типу
   // активи зазвичай в одній валюті (напр. усі акції в USD). Якщо activeType
@@ -126,11 +132,14 @@ export function InvestmentsScreen() {
   // current_price дробові (NUMERIC, не цілі копійки), і Math.round() по
   // кожній монеті окремо накопичував би похибку в кілька копійок на
   // десятках монет: вводиш "6456" у пенсіл — а підсумок показує "6456,03".
-  const investedTotalRaw = investments.reduce((sum, i) => {
-    if (i.type === 'deposit') return sum + depositTotalsById.get(i.id)!.invested
-    if (i.type === 'bond') return sum + bondTotalsById.get(i.id)!.invested
-    return sum + i.purchase_price * i.quantity
-  }, 0)
+  const investedTotalRaw =
+    manualInvestedUsdMinor > 0
+      ? manualInvestedUsdMinor
+      : investments.reduce((sum, i) => {
+          if (i.type === 'deposit') return sum + depositTotalsById.get(i.id)!.invested
+          if (i.type === 'bond') return sum + bondTotalsById.get(i.id)!.invested
+          return sum + i.purchase_price * i.quantity
+        }, 0)
   const currentTotalRaw = investments.reduce((sum, i) => {
     if (i.type === 'deposit') return sum + depositTotalsById.get(i.id)!.currentValue
     if (i.type === 'bond') return sum + bondTotalsById.get(i.id)!.currentValue
@@ -379,12 +388,18 @@ export function InvestmentsScreen() {
           title={activeType === 'stock' ? 'Скільки всього вкладено в акції' : 'Скільки всього вкладено в крипту'}
           description={
             activeType === 'stock'
-              ? 'Кількість і собівартість кожної акції редагуються по одній через картку активу — тут можна підправити лише загальну собівартість. Значення розподілиться пропорційно по всіх акціях.'
-              : 'Кількість і поточну ціну кожної монети веде синк з Binance — тут можна підправити лише загальну собівартість (у $). Значення розподілиться пропорційно по всіх монетах.'
+              ? 'Загальна сума, вкладена в акції (у $) — окреме число, що замінює суму собівартості окремих акцій. Зберігається і синхронізується між пристроями.'
+              : 'Загальна сума, вкладена в крипту (у $) — окреме число (собівартість по кожній монеті окремо більше не ведеться). Зберігається і синхронізується між пристроями.'
           }
           currentInvested={invested}
           onClose={() => setShowEditInvested(false)}
-          onSave={(newTotalUnits) => scaleInvested.mutateAsync(newTotalUnits)}
+          onSave={(newTotalUnits) =>
+            updateInvestmentSettings.mutateAsync(
+              activeType === 'stock'
+                ? { stock_manual_invested_usd_minor: newTotalUnits }
+                : { crypto_manual_invested_usd_minor: newTotalUnits }
+            )
+          }
         />
       )}
     </div>

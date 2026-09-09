@@ -76,7 +76,16 @@ export function computePortfolioSummary(
   bondCouponDates: LocalBondCouponDate[] = [],
   bondLots: LocalBondLot[] = [],
   fiscalYearStartMonth: number = getFiscalYearStartMonth(),
-  freeCashUsdMinor: number = 0
+  freeCashUsdMinor: number = 0,
+  // Ручне "Вкладено" (user_investment_settings) — коли задане (>0),
+  // ПОВНІСТЮ замінює суму purchase_price×quantity по всіх активах цього
+  // типу (не додається до неї): для крипти індивідуальна ціна купівлі
+  // per-монету більше не ведеться (AddInvestmentScreen), тож сума по рядках
+  // здебільшого нерепрезентативна; для акцій — той самий пенсіл, що раніше
+  // пропорційно масштабував purchase_price кожного рядка, тепер просто
+  // зберігає одне число. Не задано (0) → як і раніше, беремо суму по рядках.
+  stockManualInvestedUsdMinor: number = 0,
+  cryptoManualInvestedUsdMinor: number = 0
 ): PortfolioSummary {
   const byType = new Map<InvestmentType, { invested: number; currentValue: number }>()
 
@@ -136,6 +145,19 @@ export function computePortfolioSummary(
       invested: prev.invested + investedUah,
       currentValue: prev.currentValue + currentUah,
     })
+  }
+
+  // Ручне "Вкладено" акцій/крипти — замінює похідну суму purchase_price×
+  // quantity по рядках цього типу (див. коментар біля параметрів функції).
+  if (stockManualInvestedUsdMinor > 0) {
+    const manualUah = convertToUahMinorUnits(stockManualInvestedUsdMinor, 'USD', rates)
+    const prev = byType.get('stock') ?? { invested: 0, currentValue: 0 }
+    byType.set('stock', { ...prev, invested: manualUah })
+  }
+  if (cryptoManualInvestedUsdMinor > 0) {
+    const manualUah = convertToUahMinorUnits(cryptoManualInvestedUsdMinor, 'USD', rates)
+    const prev = byType.get('crypto') ?? { invested: 0, currentValue: 0 }
+    byType.set('crypto', { ...prev, invested: manualUah })
   }
 
   // Вільні кошти на брокерському рахунку (акції) — додаємо однаковою сумою

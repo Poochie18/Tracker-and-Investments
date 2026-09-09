@@ -8,7 +8,7 @@ import { resolveConflict } from './conflict-resolver'
 import { isLocalOnly } from '@/lib/auth/local-mode'
 import type {
   LocalTransaction, LocalCategory, LocalAccount, LocalInvestment, LocalDepositContribution,
-  LocalBondCouponDate, LocalBondLot, LocalPortfolioSnapshot, LocalRecurringPayment,
+  LocalBondCouponDate, LocalBondLot, LocalPortfolioSnapshot, LocalRecurringPayment, LocalUserInvestmentSettings,
 } from '@/lib/db/schema'
 
 // ============================================================
@@ -231,6 +231,7 @@ export class SyncEngine {
       this.pullBondLots(),
       this.pullPortfolioSnapshots(),
       this.pullRecurringPayments(),
+      this.pullUserInvestmentSettings(),
     ])
   }
 
@@ -429,6 +430,31 @@ export class SyncEngine {
     await db.recurringPayments.bulkPut(localRecurring)
   }
 
+  private async pullUserInvestmentSettings(): Promise<void> {
+    const { data } = await supabase
+      .from('user_investment_settings')
+      .select('*')
+      .eq('user_id', this.userId)
+
+    if (!data) return
+
+    // Як і pullInvestments — редагується напряму пенсілом, тож не можна
+    // беззастережно перезаписувати щойно зроблену локальну pending-зміну.
+    const localSettings: LocalUserInvestmentSettings[] = []
+    for (const s of data) {
+      const local = await db.userInvestmentSettings.get(s.id)
+      if (local && local._sync_status === 'pending' && resolveConflict(local, s) === 'local') continue
+      localSettings.push({
+        ...s,
+        _sync_status: 'synced',
+        _sync_error: null,
+        _local_updated_at: Date.now(),
+      })
+    }
+
+    await db.userInvestmentSettings.bulkPut(localSettings)
+  }
+
   // ── Realtime Subscription ─────────────────────────────────
   //
   // Supabase надсилає події при будь-якій зміні в БД (INSERT/UPDATE/DELETE).
@@ -494,6 +520,18 @@ export class SyncEngine {
           filter: `user_id=eq.${this.userId}`,
         },
         (payload) => void this.handleRecurringPaymentChange(payload)
+      )
+      // "Вільні кошти" і "Вкладено" акцій/крипти — щоб пенсіл, натиснутий
+      // на іншому пристрої, одразу відобразився тут без ручного синку.
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'user_investment_settings',
+          filter: `user_id=eq.${this.userId}`,
+        },
+        (payload) => void this.handleUserInvestmentSettingsChange(payload)
       )
       .subscribe()
   }
@@ -620,6 +658,30 @@ export class SyncEngine {
     this.invalidateQueries()
   }
 
+  private async handleUserInvestmentSettingsChange(
+    payload: { eventType: string; new: Record<string, unknown> }
+  ): Promise<void> {
+    const { eventType, new: newRecord } = payload
+    if (eventType === 'DELETE') return
+
+    const remoteData = newRecord as unknown as LocalUserInvestmentSettings
+    const localRecord = await db.userInvestmentSettings.get(remoteData.id)
+
+    if (localRecord && localRecord._sync_status === 'pending') {
+      const winner = resolveConflict(localRecord, remoteData)
+      if (winner === 'local') return
+    }
+
+    await db.userInvestmentSettings.put({
+      ...remoteData,
+      _sync_status: 'synced',
+      _sync_error: null,
+      _local_updated_at: Date.now(),
+    })
+
+    this.invalidateQueries()
+  }
+
   // Інвалідуємо TanStack Query кеш → компоненти перечитують з Dexie
   private invalidateQueries(): void {
     void this.queryClient.invalidateQueries({ queryKey: ['transactions'] })
@@ -631,5 +693,6 @@ export class SyncEngine {
     void this.queryClient.invalidateQueries({ queryKey: ['bond-lots'] })
     void this.queryClient.invalidateQueries({ queryKey: ['portfolio-snapshots'] })
     void this.queryClient.invalidateQueries({ queryKey: ['recurring-payments'] })
+    void this.queryClient.invalidateQueries({ queryKey: ['user-investment-settings'] })
   }
 }
