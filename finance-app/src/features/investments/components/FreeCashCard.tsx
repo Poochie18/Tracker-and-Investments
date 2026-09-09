@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Pencil, Wallet, X } from 'lucide-react'
 import { Money } from '@/lib/utils/money'
-import { useFreeCashUsdMinor, setFreeCashUsdMinor } from '@/lib/settings/free-cash'
+import { useAuth } from '@/hooks/use-auth'
+import { useFreeCashUsdMinor, setFreeCashUsdMinor } from '@/lib/settings/investment-settings'
 
 // Рядок "Вільні кошти" на вкладці Акції — готівка на брокерському рахунку
 // в доларах, ще не інвестована. Враховується в "Вкладено" і "Поточну
@@ -9,7 +10,8 @@ import { useFreeCashUsdMinor, setFreeCashUsdMinor } from '@/lib/settings/free-ca
 // спотворювався готівкою, яка сама по собі не є доходом), редагується
 // вручну через пенсіл (те саме UX, що й "Вкладено" в крипті).
 export function FreeCashCard() {
-  const cashMinor = useFreeCashUsdMinor()
+  const { user } = useAuth()
+  const cashMinor = useFreeCashUsdMinor(user?.id ?? '')
   const [showEdit, setShowEdit] = useState(false)
 
   return (
@@ -34,18 +36,28 @@ export function FreeCashCard() {
         </p>
       </div>
 
-      {showEdit && <EditFreeCashModal currentMinor={cashMinor} onClose={() => setShowEdit(false)} />}
+      {showEdit && (
+        <EditFreeCashModal userId={user?.id ?? ''} currentMinor={cashMinor} onClose={() => setShowEdit(false)} />
+      )}
     </>
   )
 }
 
-function EditFreeCashModal({ currentMinor, onClose }: { currentMinor: number; onClose: () => void }) {
+function EditFreeCashModal({
+  userId,
+  currentMinor,
+  onClose,
+}: {
+  userId: string
+  currentMinor: number
+  onClose: () => void
+}) {
   const [value, setValue] = useState((currentMinor / 100).toString())
 
   const handleSave = () => {
     const usd = parseFloat(value.replace(',', '.'))
     if (isNaN(usd) || usd < 0) return
-    setFreeCashUsdMinor(Math.round(usd * 100))
+    void setFreeCashUsdMinor(userId, Math.round(usd * 100))
     onClose()
   }
 

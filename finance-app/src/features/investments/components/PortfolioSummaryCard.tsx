@@ -10,7 +10,7 @@ interface PortfolioSummaryCardProps {
   // собівартістю паперів. Якщо не передано — картка виглядає як раніше (3 плитки).
   costBasis?: Money
   currentValue: Money
-  pnl: Money       // currentValue - costBasis (якщо costBasis передано) або currentValue - invested
+  pnl: Money       // currentValue - invested (costBasis — лише інформаційна плитка, у pnl участі не бере)
   // Не передавай на "Облігаціях" — там прибуток/збиток вже показано у
   // відсотках на кожній окремій облігації (BondListItem), в агрегованій
   // картці зверху це лише дублювало б і плутало (сумарний % по всіх
