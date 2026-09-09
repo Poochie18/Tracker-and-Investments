@@ -29,24 +29,42 @@ export const TOGGLEABLE_TYPE_LABELS: Record<InvestmentType, string> = {
 
 const listeners = new Set<() => void>()
 
+// useSyncExternalStore вимагає, щоб getSnapshot() повертав СТАБІЛЬНЕ
+// посилання, поки дані не змінились — інакше React бачить "новий" стан
+// на кожному рендері й зациклюється (React error #185, "Maximum update
+// depth exceeded", валило весь застосунок, бо AppLayout обгортає все).
+// Кешуємо Set за сирим рядком localStorage — новий об'єкт створюємо
+// лише тоді, коли рядок реально змінився.
+let cachedRaw: string | null | undefined
+let cachedTypes: Set<InvestmentType> = new Set(TOGGLEABLE_INVESTMENT_TYPES)
+
 export function getVisibleInvestmentTypes(): Set<InvestmentType> {
   const raw = localStorage.getItem(STORAGE_KEY)
-  if (!raw) return new Set(TOGGLEABLE_INVESTMENT_TYPES)
+  if (raw === cachedRaw) return cachedTypes
+
+  cachedRaw = raw
+  if (!raw) {
+    cachedTypes = new Set(TOGGLEABLE_INVESTMENT_TYPES)
+    return cachedTypes
+  }
   try {
     const parsed: unknown = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return new Set(TOGGLEABLE_INVESTMENT_TYPES)
-    const valid = parsed.filter((t): t is InvestmentType => TOGGLEABLE_INVESTMENT_TYPES.includes(t as InvestmentType))
-    return new Set(valid)
+    cachedTypes = Array.isArray(parsed)
+      ? new Set(parsed.filter((t): t is InvestmentType => TOGGLEABLE_INVESTMENT_TYPES.includes(t as InvestmentType)))
+      : new Set(TOGGLEABLE_INVESTMENT_TYPES)
   } catch {
-    return new Set(TOGGLEABLE_INVESTMENT_TYPES)
+    cachedTypes = new Set(TOGGLEABLE_INVESTMENT_TYPES)
   }
+  return cachedTypes
 }
 
 export function setInvestmentTypeVisible(type: InvestmentType, visible: boolean): void {
-  const current = getVisibleInvestmentTypes()
-  if (visible) current.add(type)
-  else current.delete(type)
-  localStorage.setItem(STORAGE_KEY, JSON.stringify([...current]))
+  // Копія, а не мутація кешованого Set напряму — той самий об'єкт міг уже
+  // піти в React як snapshot з попереднього рендера.
+  const next = new Set(getVisibleInvestmentTypes())
+  if (visible) next.add(type)
+  else next.delete(type)
+  localStorage.setItem(STORAGE_KEY, JSON.stringify([...next]))
   listeners.forEach((l) => l())
 }
 
