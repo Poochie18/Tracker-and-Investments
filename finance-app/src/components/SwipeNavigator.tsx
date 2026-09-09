@@ -65,6 +65,7 @@ export function SwipeNavigator({ children, onSwipeLeft, onSwipeRight, threshold 
       onPointerUp={finishDrag}
       onPointerCancel={finishDrag}
       style={{
+        width: '100%',
         transform: `translateX(${offsetX}px)`,
         transition: isDragging ? 'none' : 'transform 0.2s ease',
         touchAction: 'pan-y',

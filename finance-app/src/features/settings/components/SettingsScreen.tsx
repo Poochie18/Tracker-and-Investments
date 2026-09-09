@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { ChevronRight, Check, Tag, Landmark, Archive, LogOut, Info, Wrench, Trash2, UploadCloud, KeyRound, Cloud, UserPlus } from 'lucide-react'
+import { ChevronRight, Tag, Landmark, Archive, LogOut, Info, Wrench, Trash2, UploadCloud, KeyRound, Cloud, UserPlus, SlidersHorizontal } from 'lucide-react'
 import { CryptoApiKeysModal } from './CryptoApiKeysModal'
 import { useAuth } from '@/hooks/use-auth'
 import { useQueryClient } from '@tanstack/react-query'
@@ -13,9 +13,6 @@ import {
 import { transactionKeys } from '@/hooks/use-transactions'
 import { investmentKeys } from '@/hooks/use-investments'
 import { MONTH_NAMES_UK, useFiscalYearStartMonth, setFiscalYearStartMonth } from '@/lib/settings/fiscal-year'
-import {
-  TOGGLEABLE_INVESTMENT_TYPES, TOGGLEABLE_TYPE_LABELS, useVisibleInvestmentTypes, setInvestmentTypeVisible,
-} from '@/lib/settings/investment-visibility'
 import { useSyncContext } from '@/lib/sync/sync-context'
 import { authClient } from '@/lib/auth/auth-client'
 import { disableGuestMode, markPendingGuestMigration } from '@/lib/auth/local-mode'
@@ -54,7 +51,6 @@ export function SettingsScreen() {
   const [importing, setImporting] = useState(false)
   const [importMsg, setImportMsg] = useState<string | null>(null)
   const fiscalYearStartMonth = useFiscalYearStartMonth()
-  const visibleInvestmentTypes = useVisibleInvestmentTypes()
 
   // Ім'я користувача з Google-профілю (user_metadata приходить з Google OAuth:
   // full_name/name — повне ім'я, given_name — тільки ім'я). Беремо перше
@@ -272,41 +268,12 @@ export function SettingsScreen() {
           onPress={() => setShowCryptoKeys(true)}
         />
 
-        {/* ── Які вкладки типів інвестицій показувати в меню ── */}
-        <div
-          className="flex flex-col gap-1 px-4 py-3 rounded-2xl w-full"
-          style={{ backgroundColor: 'var(--color-bg-card)' }}
-        >
-          <p className="text-sm font-medium mb-1" style={{ color: 'var(--color-text-primary)' }}>
-            Вкладки в меню Інвестицій
-          </p>
-          {TOGGLEABLE_INVESTMENT_TYPES.map((type) => {
-            const checked = visibleInvestmentTypes.has(type)
-            return (
-              <button
-                key={type}
-                type="button"
-                onClick={() => setInvestmentTypeVisible(type, !checked)}
-                className="flex items-center gap-3 py-2 w-full text-left"
-              >
-                <span
-                  className="flex items-center justify-center rounded-md shrink-0 transition-colors"
-                  style={{
-                    width: 20,
-                    height: 20,
-                    backgroundColor: checked ? 'var(--color-accent)' : 'transparent',
-                    border: checked ? 'none' : '1.5px solid var(--color-text-secondary)',
-                  }}
-                >
-                  {checked && <Check size={14} color="#1B2A2A" strokeWidth={3} />}
-                </span>
-                <span className="text-sm" style={{ color: 'var(--color-text-primary)' }}>
-                  {TOGGLEABLE_TYPE_LABELS[type]}
-                </span>
-              </button>
-            )
-          })}
-        </div>
+        <SettingsItem
+          icon={<SlidersHorizontal size={18} />}
+          label="Вкладки інвестицій"
+          description="Які вкладки показувати в меню розділу"
+          onPress={() => navigate('/settings/investment-visibility')}
+        />
 
         {/* ── Секція: зберігання даних ─────────────────────── */}
         <p className="text-xs font-medium px-1 mt-4 mb-1" style={{ color: 'var(--color-text-secondary)' }}>

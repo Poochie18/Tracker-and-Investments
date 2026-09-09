@@ -13,6 +13,7 @@ import { TransactionsListScreen } from '@/features/transactions/components/Trans
 import { SettingsScreen } from '@/features/settings/components/SettingsScreen'
 import { ManageAccountsScreen } from '@/features/settings/components/ManageAccountsScreen'
 import { ManageCategoriesScreen } from '@/features/settings/components/ManageCategoriesScreen'
+import { ManageInvestmentVisibilityScreen } from '@/features/settings/components/ManageInvestmentVisibilityScreen'
 import { BackupScreen } from '@/features/settings/components/BackupScreen'
 import { ExcelImportScreen } from '@/features/settings/components/ExcelImportScreen'
 import { InvestmentsScreen } from '@/features/investments/components/InvestmentsScreen'
@@ -87,6 +88,7 @@ export default function App() {
               <Route path="/settings" element={<SettingsScreen />} />
               <Route path="/settings/accounts" element={<ManageAccountsScreen />} />
               <Route path="/settings/categories" element={<ManageCategoriesScreen />} />
+              <Route path="/settings/investment-visibility" element={<ManageInvestmentVisibilityScreen />} />
               <Route path="/settings/backup" element={<BackupScreen />} />
               <Route path="/settings/backup/import-excel" element={<ExcelImportScreen />} />
             </Route>
