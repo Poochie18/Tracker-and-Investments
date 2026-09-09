@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { Money } from '@/lib/utils/money'
 import { convertFromUahMinorUnits, type ExchangeRates } from '@/lib/investments/exchange-rate'
 import { DonutChart } from '@/features/transactions/components/DonutChart'
@@ -17,7 +18,15 @@ export function PortfolioAllocationChart({ summary, displayCurrency, rates }: Po
     convertFromUahMinorUnits(summary.totalCurrentValue, displayCurrency, rates)
   ).formatWhole(symbol)
 
-  const data = summary.rows.map((r) => ({ name: r.label, value: r.currentValue, color: r.colorHex }))
+  // useMemo — без нього масив пересоздавався б щорендеру навіть коли
+  // summary.rows фактично не змінився, і recharts (ResponsiveContainer)
+  // бачив "нові" дані на кожен рендер батька, що разом з нестабільними
+  // query-дефолтами вище по дереву спричиняло "Maximum update depth
+  // exceeded" на вкладці "Огляд".
+  const data = useMemo(
+    () => summary.rows.map((r) => ({ name: r.label, value: r.currentValue, color: r.colorHex })),
+    [summary]
+  )
 
   return (
     <div>

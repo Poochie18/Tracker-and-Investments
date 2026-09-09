@@ -20,7 +20,11 @@ export function DonutChart({ data, centerLabel, centerSublabel }: DonutChartProp
 
   return (
     <div className="relative flex items-center justify-center" style={{ height: 220 }}>
-      <ResponsiveContainer width="100%" height="100%">
+      {/* minWidth/minHeight — те саме міркування, що в
+          PortfolioPerformanceChart: без явного мінімуму recharts інколи
+          вимірює контейнер до фінального layout-проходу батька й бачить
+          -1/0, звідки консольний спам "The width(-1) and height(-1)...". */}
+      <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
         <PieChart>
           <Pie
             data={chartData}

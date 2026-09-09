@@ -36,6 +36,15 @@ interface PortfolioView {
   rates: ExchangeRates
 }
 
+// Стабільна референція для "поки завантажується" — `data: x = []` в
+// деструктуризації нижче створював би НОВИЙ порожній масив щорендеру, поки
+// query ще не всталося (undefined). Це ламало memo-залежності liveSummary/
+// views (useMemo бачив "новий" масив і перераховував їх щорендеру), а це
+// каскадно ганяло нові summary/data-об'єкти в графіки (recharts) — разом з
+// ResponsiveContainer(recharts v3.8.1)'s ResizeObserver це й спричиняло
+// "Maximum update depth exceeded" на вкладці "Огляд".
+const EMPTY_ARRAY: never[] = []
+
 // Сторінка "Огляд" розділу Інвестиції — зведена таблиця по типах вкладення
 // (аналог листа "Сводка" з Excel-трекера користувача) + два графіки:
 // розподіл портфеля (pie) і поточна вартість відносно дохідності (bar+line).
@@ -48,10 +57,10 @@ export function PortfolioOverview({ investments, rates, isLoading }: PortfolioOv
   const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>('UAH')
   const [selectedViewKey, setSelectedViewKey] = useState('live')
   const { user } = useAuth()
-  const { data: depositContributions = [] } = useAllDepositContributions(user?.id)
-  const { data: bondCouponDates = [] } = useAllBondCouponDates(user?.id)
-  const { data: bondLots = [] } = useAllBondLots(user?.id)
-  const { data: snapshots = [] } = usePortfolioSnapshots(user?.id)
+  const { data: depositContributions = EMPTY_ARRAY } = useAllDepositContributions(user?.id)
+  const { data: bondCouponDates = EMPTY_ARRAY } = useAllBondCouponDates(user?.id)
+  const { data: bondLots = EMPTY_ARRAY } = useAllBondLots(user?.id)
+  const { data: snapshots = EMPTY_ARRAY } = usePortfolioSnapshots(user?.id)
   const fiscalYearStartMonth = useFiscalYearStartMonth()
   const freeCashUsdMinor = useFreeCashUsdMinor(user?.id ?? '')
   const stockManualInvestedUsdMinor = useStockManualInvestedUsdMinor(user?.id ?? '')

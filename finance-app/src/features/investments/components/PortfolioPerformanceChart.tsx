@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import {
   ComposedChart, Bar, Line, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts'
@@ -41,19 +42,31 @@ function ChartTooltip({ active, payload }: { active?: boolean; payload?: Tooltip
 export function PortfolioPerformanceChart({ summary, displayCurrency, rates }: PortfolioPerformanceChartProps) {
   const symbol = displayCurrency === 'UAH' ? '₴' : '$'
 
-  const data = summary.rows.map((r) => ({
-    label: r.label,
-    currentValueDisplay: convertFromUahMinorUnits(r.currentValue, displayCurrency, rates) / 100,
-    pnlPercent: r.pnlPercent,
-    colorHex: r.colorHex,
-  }))
+  // useMemo — те саме міркування, що в PortfolioAllocationChart: без нього
+  // масив пересоздавався б щорендеру, навіть коли summary/displayCurrency/
+  // rates фактично не змінились, і recharts бачив "нові" дані щоразу.
+  const data = useMemo(
+    () =>
+      summary.rows.map((r) => ({
+        label: r.label,
+        currentValueDisplay: convertFromUahMinorUnits(r.currentValue, displayCurrency, rates) / 100,
+        pnlPercent: r.pnlPercent,
+        colorHex: r.colorHex,
+      })),
+    [summary, displayCurrency, rates]
+  )
 
   return (
     <div>
       <p className="text-xs font-medium px-4 mb-1" style={{ color: 'var(--color-text-secondary)' }}>
         Поточна вартість і дохідність по типах
       </p>
-      <ResponsiveContainer width="100%" height={260}>
+      {/* minWidth/minHeight — recharts інколи вимірює контейнер до того, як
+          flex-батько (view-switcher/currency-switch рядки вище) остаточно
+          розклався, і на перших кадрах бачить width/height 0 чи -1
+          ("The width(-1) and height(-1)..." у консолі). Явний мінімум
+          прибирає цю нестабільну точку виміру. */}
+      <ResponsiveContainer width="100%" height={260} minWidth={0} minHeight={260}>
         <ComposedChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" vertical={false} />
           <XAxis
