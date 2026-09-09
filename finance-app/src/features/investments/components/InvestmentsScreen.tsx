@@ -132,18 +132,14 @@ export function InvestmentsScreen() {
   // current_price дробові (NUMERIC, не цілі копійки), і Math.round() по
   // кожній монеті окремо накопичував би похибку в кілька копійок на
   // десятках монет: вводиш "6456" у пенсіл — а підсумок показує "6456,03".
-  //
-  // "Сума купівлі" — реальна сума purchase_price×quantity по всіх рядках
-  // (для акцій: скільки фактично витрачено на куплені акції). Окрема від
-  // "Вкладено" — те тепер суто ручне число (пенсіл), нічим не замінюється
-  // й ні з чим не сумується; поки пенсіл ще не використали (0), "Вкладено"
-  // просто дублює цю суму купівлі за замовчуванням.
-  const purchasesTotalRaw = investments.reduce((sum, i) => {
-    if (i.type === 'deposit') return sum + depositTotalsById.get(i.id)!.invested
-    if (i.type === 'bond') return sum + bondTotalsById.get(i.id)!.invested
-    return sum + i.purchase_price * i.quantity
-  }, 0)
-  const investedTotalRaw = manualInvestedUsdMinor > 0 ? manualInvestedUsdMinor : purchasesTotalRaw
+  const investedTotalRaw =
+    manualInvestedUsdMinor > 0
+      ? manualInvestedUsdMinor
+      : investments.reduce((sum, i) => {
+          if (i.type === 'deposit') return sum + depositTotalsById.get(i.id)!.invested
+          if (i.type === 'bond') return sum + bondTotalsById.get(i.id)!.invested
+          return sum + i.purchase_price * i.quantity
+        }, 0)
   const currentTotalRaw = investments.reduce((sum, i) => {
     if (i.type === 'deposit') return sum + depositTotalsById.get(i.id)!.currentValue
     if (i.type === 'bond') return sum + bondTotalsById.get(i.id)!.currentValue
@@ -154,7 +150,6 @@ export function InvestmentsScreen() {
   // ручне число, кошти в нього більше не підмішуються.
   const cashRaw = activeType === 'stock' ? freeCashUsdMinor : 0
   const invested = Money.fromKopiyky(Math.round(investedTotalRaw))
-  const purchaseAmount = Money.fromKopiyky(Math.round(purchasesTotalRaw))
   const currentValue = Money.fromKopiyky(Math.round(currentTotalRaw) + cashRaw)
   const pnl = currentValue.subtract(invested)
   const pnlPercent = invested.isZero() ? 0 : (pnl.toKopiyky() / invested.toKopiyky()) * 100
@@ -294,7 +289,6 @@ export function InvestmentsScreen() {
                 pnl={pnl}
                 pnlPercent={pnlPercent}
                 uahEquivalent={uahEquivalent}
-                purchaseAmount={activeType === 'stock' ? purchaseAmount : undefined}
                 currencySymbol={activeType === 'crypto' || activeType === 'stock' ? '$' : '₴'}
                 onEditInvested={
                   activeType === 'crypto' || activeType === 'stock' ? () => setShowEditInvested(true) : undefined
