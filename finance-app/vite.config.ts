@@ -7,7 +7,9 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // На GitHub Pages додаток живе не в корені домену, а в /Tracker-and-Investments/ —
 // base застосовується і до Vite-збірки, і до маніфесту/service worker нижче.
-const base = '/Tracker-and-Investments/'
+// Нативний Capacitor-білд (npm run build:native, перед `npx cap sync`) живе
+// в корені webview — там підпапка зламає всі абсолютні посилання/роутинг.
+const base = process.env.CAPACITOR ? '/' : '/Tracker-and-Investments/'
 
 // Версія з package.json — показується в Налаштування → Про застосунок
 // (__APP_VERSION__, оголошено в src/vite-env.d.ts).
