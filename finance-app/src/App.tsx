@@ -21,6 +21,7 @@ import { AddInvestmentScreen } from '@/features/investments/components/AddInvest
 import { InvestmentDetailScreen } from '@/features/investments/components/InvestmentDetailScreen'
 import { ChartsScreen } from '@/features/transactions/components/ChartsScreen'
 import { RecurringPaymentsScreen } from '@/features/transactions/components/RecurringPaymentsScreen'
+import { SavingsScreen } from '@/features/transactions/components/SavingsScreen'
 import { useUIStore } from '@/stores/ui-store'
 
 const queryClient = new QueryClient({
@@ -80,6 +81,7 @@ export default function App() {
               <Route path="/list" element={<TransactionsListScreen />} />
               <Route path="/charts" element={<ChartsScreen />} />
               <Route path="/recurring" element={<RecurringPaymentsScreen />} />
+              <Route path="/savings" element={<SavingsScreen />} />
               <Route path="/investments" element={<InvestmentsScreen />} />
               <Route path="/investments/add" element={<AddInvestmentScreen />} />
               <Route path="/investments/:id/edit" element={<AddInvestmentScreen />} />

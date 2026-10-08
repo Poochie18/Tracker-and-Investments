@@ -201,6 +201,24 @@ export interface RecurringPayment {
   deleted_at: string | null      // null = активний, не-null = видалений (soft delete)
 }
 
+// "Гаманець" готівкових заощаджень — довільна назва (напр. "Вдома в сейфі")
+// з трьома сумами одночасно, по одній на кожну валюту. Усі три поля завжди
+// в мінімальних одиницях (копійки/центи) і НЕ nullable (навіть якщо в
+// конкретному гаманці 0 у якійсь валюті) — щоб підсумок по вкладці рахувався
+// простим sum() без перевірок на null. Перерахунок у відображувану валюту
+// (перемикач ГРН/USD/EUR) — за курсом НБУ, див. exchange-rate.ts.
+export interface Savings {
+  id: string
+  user_id: string
+  name: string             // назва гаманця, напр. "Готівка вдома"
+  amount_uah: number        // ЗАВЖДИ у копійках!
+  amount_usd: number        // ЗАВЖДИ у центах!
+  amount_eur: number        // ЗАВЖДИ у центах!
+  created_at: string
+  updated_at: string
+  deleted_at: string | null  // null = активний, не-null = видалений (soft delete)
+}
+
 // Один рядок на користувача — "Вільні кошти" (готівка на брокерському
 // рахунку, вкладка "Акції") і ручне "Вкладено" на вкладках "Акції"/"Крипта"
 // (агреговане число, редагується пенсілом біля картки зведення — не
@@ -284,6 +302,12 @@ export interface LocalPortfolioSnapshot extends PortfolioSnapshot {
 }
 
 export interface LocalRecurringPayment extends RecurringPayment {
+  _sync_status: SyncStatus
+  _sync_error: string | null
+  _local_updated_at: number
+}
+
+export interface LocalSavings extends Savings {
   _sync_status: SyncStatus
   _sync_error: string | null
   _local_updated_at: number
