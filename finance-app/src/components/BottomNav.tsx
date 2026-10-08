@@ -10,7 +10,7 @@ import { useFilterStore } from '@/stores/filter-store'
 // matchPrefixes — бо "Транзакції" має підсвічуватись не тільки на /overview,
 // а й на /list, /charts, /recurring, /add тощо (весь розділ).
 const NAV_ITEMS = [
-  { to: '/overview', icon: Wallet, label: 'Транзакції', matchPrefixes: ['/overview', '/list', '/charts', '/recurring', '/add', '/transactions'] },
+  { to: '/overview', icon: Wallet, label: 'Транзакції', matchPrefixes: ['/overview', '/list', '/charts', '/recurring', '/savings', '/add', '/transactions'] },
   { to: '/investments', icon: TrendingUp, label: 'Інвестиції', matchPrefixes: ['/investments'] },
 ] as const
 

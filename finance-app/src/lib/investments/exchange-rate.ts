@@ -91,12 +91,20 @@ export function convertToUahMinorUnits(minorUnits: number, currency: string, rat
   }
 }
 
-// Переводить гривневий базис у валюту відображення (для перемикача UAH/USD)
+// Переводить гривневий базис у валюту відображення (для перемикача
+// UAH/USD/EUR — EUR додано для вкладки "Збереження", решта перемикачів
+// (інвестиції) досі користуються лише UAH/USD).
 export function convertFromUahMinorUnits(
   uahMinorUnits: number,
-  targetCurrency: 'UAH' | 'USD',
+  targetCurrency: 'UAH' | 'USD' | 'EUR',
   rates: ExchangeRates
 ): number {
-  if (targetCurrency === 'UAH') return uahMinorUnits
-  return Math.round(uahMinorUnits / rates.usd)
+  switch (targetCurrency) {
+    case 'USD':
+      return Math.round(uahMinorUnits / rates.usd)
+    case 'EUR':
+      return Math.round(uahMinorUnits / rates.eur)
+    default:
+      return uahMinorUnits
+  }
 }

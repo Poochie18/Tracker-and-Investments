@@ -1,5 +1,5 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { BarChart2, List, LineChart, Repeat, PieChart, Landmark, FileText, Bitcoin, TrendingUp } from 'lucide-react'
+import { BarChart2, List, LineChart, Repeat, PiggyBank, PieChart, Landmark, FileText, Bitcoin, TrendingUp } from 'lucide-react'
 import { BottomNav } from './BottomNav'
 import { SecondaryNav, type SecondaryNavItem } from './SecondaryNav'
 import { ErrorBoundary } from './ErrorBoundary'
@@ -62,6 +62,7 @@ export function AppLayout() {
       { to: '/list', icon: List, label: 'Список', onClick: () => setCategoryFilter(null) },
       { to: '/charts', icon: LineChart, label: 'Графіки' },
       { to: '/recurring', icon: Repeat, label: 'Регулярні' },
+      { to: '/savings', icon: PiggyBank, label: 'Збереження' },
     ]
   }
 
